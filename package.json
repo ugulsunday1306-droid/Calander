@@ -1,6 +1,6 @@
 {
   "name": "schedule-planner",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "Premium 10-minute drag-to-select schedule organizer",
   "main": "main.js",
   "scripts": {

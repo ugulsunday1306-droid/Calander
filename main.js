@@ -106,7 +106,7 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (robocopy 기반 100% 무결성 덮어쓰기 & 작업 디렉토리 명시 자동 재실행)
+// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (PowerShell Bypass 백그라운드 100% 덮어쓰기 & 자동 재실행)
 function applyUpdateAndRestart(zipPath, extractTempDir) {
   isQuitting = true;
 
@@ -118,10 +118,8 @@ function applyUpdateAndRestart(zipPath, extractTempDir) {
   }
 
   const exeName = app.isPackaged ? path.basename(process.execPath) : 'UGULCalander.exe';
+  const exeBaseName = exeName.replace(/\.exe$/i, '');
   const exePath = path.join(appDir, exeName);
-  const batPath = path.join(app.getPath('temp'), 'ugul_updater.bat');
-  const logPath = path.join(app.getPath('temp'), 'ugul_updater.log');
-  const backupDir = path.join(app.getPath('temp'), 'ugul_user_backup');
 
   const safeZipPath = zipPath || path.join(app.getPath('temp'), 'ugul_update.zip');
   const safeExtractDir = extractTempDir || path.join(app.getPath('temp'), 'ugul_extracted_update');
@@ -132,53 +130,47 @@ function applyUpdateAndRestart(zipPath, extractTempDir) {
     sourceDir = innerSubDir;
   }
 
-  // robocopy/xcopy 경로 끝 백슬래시 이스케이프 버그 방지
-  const cleanAppDir = appDir.replace(/\\+$/, '');
-  const cleanSourceDir = sourceDir.replace(/\\+$/, '');
+  const psScriptPath = path.join(app.getPath('temp'), 'ugul_updater.ps1');
 
-  const batContent = `@echo off
-chcp 65001 > nul
-title UGUL Calander Auto Updater
+  const psContent = `
+$ErrorActionPreference = 'SilentlyContinue'
+Start-Sleep -Seconds 2
+Get-Process -Name "${exeBaseName}" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
 
-echo [%date% %time%] Updater Started > "${logPath}"
+$backupDir = "${path.join(app.getPath('temp'), 'ugul_user_backup').replace(/\\/g, '\\\\')}"
+if (Test-Path $backupDir) { Remove-Item -Path $backupDir -Recurse -Force }
+New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
 
-rem 1. 부모 앱 프로세스 강제 종료 (파일 락 100% 해제)
-timeout /t 2 /nobreak > nul
-taskkill /F /IM "${exeName}" >> "${logPath}" 2>&1
-timeout /t 1 /nobreak > nul
+$appDir = "${appDir.replace(/\\/g, '\\\\')}"
+$sourceDir = "${sourceDir.replace(/\\/g, '\\\\')}"
+$exePath = "${exePath.replace(/\\/g, '\\\\')}"
 
-rem 2. 사용자 데이터(events.json 및 cache) 백업
-if exist "${backupDir}" rmdir /s /q "${backupDir}"
-mkdir "${backupDir}"
-if exist "${cleanAppDir}\\events.json" copy /y "${cleanAppDir}\\events.json" "${backupDir}\\events.json" >> "${logPath}" 2>&1
-if exist "${cleanAppDir}\\cache" xcopy /s /e /y /i "${cleanAppDir}\\cache" "${backupDir}\\cache" >> "${logPath}" 2>&1
+if (Test-Path "$appDir\\events.json") { Copy-Item "$appDir\\events.json" "$backupDir\\events.json" -Force }
+if (Test-Path "$appDir\\cache") { Copy-Item "$appDir\\cache" "$backupDir\\cache" -Recurse -Force }
 
-rem 3. robocopy를 사용한 최신 파일 통째로 덮어쓰기 (Windows 10/11 전용 최고 속도 무결성 복사)
-robocopy "${cleanSourceDir}" "${cleanAppDir}" /E /IS /IT /NJH /NJS /nc /ns /np >> "${logPath}" 2>&1
-if errorlevel 8 (
-    xcopy /s /e /y /i "${cleanSourceDir}" "${cleanAppDir}" >> "${logPath}" 2>&1
-)
+Copy-Item -Path "$sourceDir\\*" -Destination "$appDir" -Recurse -Force
 
-rem 4. 백업해둔 사용자 데이터 100% 복원
-if exist "${backupDir}\\events.json" copy /y "${backupDir}\\events.json" "${cleanAppDir}\\events.json" >> "${logPath}" 2>&1
-if exist "${backupDir}\\cache" xcopy /s /e /y /i "${backupDir}\\cache" "${cleanAppDir}\\cache" >> "${logPath}" 2>&1
+if (Test-Path "$backupDir\\events.json") { Copy-Item "$backupDir\\events.json" "$appDir\\events.json" -Force }
+if (Test-Path "$backupDir\\cache") { Copy-Item "$backupDir\\cache" "$appDir\\cache" -Recurse -Force }
 
-rem 5. 임시 백업/패치 파일 정리
-if exist "${backupDir}" rmdir /s /q "${backupDir}"
-if exist "${safeExtractDir}" rmdir /s /q "${safeExtractDir}"
-if exist "${safeZipPath}" del /f /q "${safeZipPath}"
+if (Test-Path $backupDir) { Remove-Item -Path $backupDir -Recurse -Force }
+if (Test-Path "${safeExtractDir.replace(/\\/g, '\\\\')}") { Remove-Item -Path "${safeExtractDir.replace(/\\/g, '\\\\')}" -Recurse -Force }
+if (Test-Path "${safeZipPath.replace(/\\/g, '\\\\')}") { Remove-Item -Path "${safeZipPath.replace(/\\/g, '\\\\')}" -Force }
 
-echo [%date% %time%] Launching new executable: "${exePath}" >> "${logPath}"
-
-rem 6. 최신 앱 작업 디렉토리 명시 후 자동 재실행
-start "" /D "${cleanAppDir}" "${exePath}"
-del /f /q "%~f0"
+Start-Process -FilePath $exePath -WorkingDirectory $appDir
+Remove-Item -Path $MyInvocation.MyCommand.Path -Force
 `;
 
   try {
-    fs.writeFileSync(batPath, batContent, 'utf-8');
+    fs.writeFileSync(psScriptPath, psContent, 'utf-8');
 
-    spawn('cmd.exe', ['/c', batPath], {
+    spawn('powershell.exe', [
+      '-ExecutionPolicy', 'Bypass',
+      '-NoProfile',
+      '-WindowStyle', 'Hidden',
+      '-File', psScriptPath
+    ], {
       detached: true,
       stdio: 'ignore'
     }).unref();
@@ -188,7 +180,7 @@ del /f /q "%~f0"
       app.exit(0);
     }, 400);
   } catch (err) {
-    console.error('Failed to launch updater:', err);
+    console.error('Failed to launch powershell updater:', err);
   }
 }
 
