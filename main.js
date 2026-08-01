@@ -204,7 +204,7 @@ Start-Sleep -Seconds 3
   fs.writeFileSync(psScriptPath, psScript, 'utf-8');
 
   try {
-    exec(`start "" powershell.exe -ExecutionPolicy Bypass -NoExit -File "${psScriptPath}"`);
+    exec(`start "" powershell.exe -ExecutionPolicy Bypass -File "${psScriptPath}"`);
 
     setTimeout(() => {
       if (mainWindow) mainWindow.destroy();
