@@ -4660,7 +4660,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.electronAPI && window.electronAPI.send) {
           window.electronAPI.send('check-for-updates-manual');
         } else {
-          alert('현재 버전: v1.0.5 (GitHub Repository: ugulsunday1306-droid/Calander)');
+          alert('현재 버전: v1.0.7 (GitHub Repository: ugulsunday1306-droid/Calander)');
         }
       });
     }
@@ -4729,9 +4729,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (window.electronAPI.onUpdateProgress) {
         window.electronAPI.onUpdateProgress((percent) => {
-          if (progressWidget) progressWidget.style.display = 'block';
-          if (progressPercent) progressPercent.textContent = `${percent}%`;
-          if (progressBarFill) progressBarFill.style.width = `${percent}%`;
+          requestAnimationFrame(() => {
+            if (progressWidget) progressWidget.style.display = 'block';
+            if (progressPercent) progressPercent.textContent = `${percent}%`;
+            if (progressBarFill) progressBarFill.style.width = `${percent}%`;
+          });
         });
       }
 

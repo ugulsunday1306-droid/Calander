@@ -20,10 +20,11 @@ function isNewerVersion(currentVer, latestVer) {
   return false;
 }
 
-// 초강력 무결성 다운로더 (HTTP/HTTPS 자동 전환 & CDN 302 리다이렉트 100% 추적 & 퍼센트 보장)
+// 초강력 무결성 다운로더 (HTTP/HTTPS 자동 전환 & CDN 302 리다이렉트 100% 추적 & IPC 폭주 방지 퍼센트 보장)
 function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   const fileStream = fs.createWriteStream(destPath);
   let isFinished = false;
+  let lastSentPercent = -1;
 
   const fetchUrl = (currentUrl) => {
     try {
@@ -70,7 +71,12 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
             } else {
               percent = Math.min(99, Math.max(5, Math.round((downloadedBytes / (1024 * 1024 * 10)) * 100)));
             }
-            onProgress(percent);
+
+            // [핵심 해결책] IPC 이벤트 초당 수백번 폭주 방지: 정수 퍼센트가 바뀔 때만 렌더러로 전송!
+            if (percent !== lastSentPercent) {
+              lastSentPercent = percent;
+              onProgress(percent);
+            }
           }
         });
 
