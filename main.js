@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut, shell } = require('electron');
 const path = require('path');
 const https = require('https');
+const fs = require('fs');
+const { spawn } = require('child_process');
 
 const GITHUB_OWNER = 'ugulsunday1306-droid';
 const GITHUB_REPO = 'Calander';
@@ -16,6 +18,88 @@ function isNewerVersion(currentVer, latestVer) {
     if (l < c) return false;
   }
   return false;
+}
+
+// 스마트 리다이렉트 지원 다운로더 (GitHub Release Location Redirect 302 대응)
+function downloadFile(url, destPath, onProgress, onComplete, onError) {
+  const request = (targetUrl) => {
+    https.get(targetUrl, { headers: { 'User-Agent': 'UGUL-Calander-App' } }, (res) => {
+      // 301, 302, 307 리다이렉트 처리
+      if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
+        if (res.headers.location) {
+          return request(res.headers.location);
+        }
+      }
+
+      if (res.statusCode !== 200) {
+        return onError(new Error(`Download failed with status code ${res.statusCode}`));
+      }
+
+      const totalSize = parseInt(res.headers['content-length'] || '0', 10);
+      let downloadedSize = 0;
+      const fileStream = fs.createWriteStream(destPath);
+
+      res.on('data', (chunk) => {
+        downloadedSize += chunk.length;
+        if (totalSize > 0 && onProgress) {
+          const percent = Math.round((downloadedSize / totalSize) * 100);
+          onProgress(percent);
+        }
+      });
+
+      res.pipe(fileStream);
+
+      fileStream.on('finish', () => {
+        fileStream.close(() => onComplete());
+      });
+
+      fileStream.on('error', (err) => {
+        fs.unlink(destPath, () => {});
+        onError(err);
+      });
+    }).on('error', (err) => {
+      fs.unlink(destPath, () => {});
+      onError(err);
+    });
+  };
+
+  request(url);
+}
+
+// 앱 재시작 및 덮어쓰기 배치 스크립트 실행
+function applyUpdateAndRestart(zipPath) {
+  let appDir;
+  if (app.isPackaged) {
+    appDir = path.dirname(process.execPath);
+  } else {
+    appDir = __dirname;
+  }
+
+  const exeName = app.isPackaged ? path.basename(process.execPath) : 'UGULCalander.exe';
+  const batPath = path.join(app.getPath('temp'), 'ugul_updater.bat');
+
+  // Windows tar 명령어를 사용하여 압축 해제 및 덮어쓰기 후 앱 재실행
+  const batContent = `@echo off
+chcp 65001 > nul
+timeout /t 2 /nobreak > nul
+tar -xf "${zipPath}" -C "${appDir}"
+del /f /q "${zipPath}"
+start "" "${path.join(appDir, exeName)}"
+del /f /q "%~f0"
+`;
+
+  try {
+    fs.writeFileSync(batPath, batContent, 'utf-8');
+    spawn('cmd.exe', ['/c', batPath], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    }).unref();
+
+    app.quit();
+  } catch (err) {
+    console.error('Failed to launch update batch script:', err);
+  }
 }
 
 function checkForGitHubUpdates(isManualCheck = false) {
@@ -38,7 +122,7 @@ function checkForGitHubUpdates(isManualCheck = false) {
               type: 'info',
               title: '업데이트 확인',
               message: '최신 릴리즈 정보를 가져올 수 없습니다.',
-              detail: '아직 깃허브(GitHub)에 배포된 최신 릴리즈가 없거나 네트워크 상태를 확인해 주세요.'
+              detail: '아직 깃허브(GitHub)에 등록된 최신 배포본이 없거나 네트워크 상태를 확인해 주세요.'
             });
           }
           return;
@@ -49,16 +133,54 @@ function checkForGitHubUpdates(isManualCheck = false) {
         const currentVersion = app.getVersion();
 
         if (isNewerVersion(currentVersion, latestTag)) {
+          // Releases 에셋에서 zip 파일 탐색
+          const zipAsset = (release.assets || []).find(a => a.name.endsWith('.zip'));
+          const downloadUrl = zipAsset ? zipAsset.browser_download_url : null;
+
           dialog.showMessageBox(mainWindow || null, {
             type: 'info',
-            title: 'UGUL Calander 새 버전 알림',
-            message: `📢 새로운 버전(${latestTag})이 출시되었습니다!`,
-            detail: `현재 버전: v${currentVersion}\n최신 버전: ${latestTag}\n\n다운로드 페이지로 이동하여 최신 버전을 받으시겠습니까?`,
-            buttons: ['다운로드 페이지로 이동', '나중에'],
+            title: 'UGUL Calander 새 버전 발견',
+            message: `🚀 새로운 버전(${latestTag})이 준비되었습니다!`,
+            detail: `현재 버전: v${currentVersion}\n최신 버전: ${latestTag}\n\n지금 인앱에서 바로 내려받아 패치하시겠습니까?`,
+            buttons: ['지금 인앱 업데이트', '나중에'],
             defaultId: 0
           }).then(result => {
-            if (result.response === 0 && release.html_url) {
-              shell.openExternal(release.html_url);
+            if (result.response === 0) {
+              if (!downloadUrl) {
+                // zip 파일이 직접 첨부되지 않은 경우 웹 페이지 연결 fallback
+                if (release.html_url) shell.openExternal(release.html_url);
+                return;
+              }
+
+              const tempZipPath = path.join(app.getPath('temp'), 'ugul_update.zip');
+
+              dialog.showMessageBox(mainWindow || null, {
+                type: 'info',
+                title: '업데이트 다운로드 중...',
+                message: '백그라운드에서 최신 패치 파일을 내려받는 중입니다.',
+                detail: '다운로드가 완료되면 앱이 자동으로 재시작되며 업데이트가 즉시 적용됩니다.',
+                buttons: ['확인']
+              });
+
+              downloadFile(
+                downloadUrl,
+                tempZipPath,
+                (percent) => {
+                  console.log(`Update download progress: ${percent}%`);
+                },
+                () => {
+                  // 다운로드 완료 시 자동 패치 적용 및 재시작
+                  applyUpdateAndRestart(tempZipPath);
+                },
+                (err) => {
+                  dialog.showMessageBox(mainWindow || null, {
+                    type: 'error',
+                    title: '업데이트 실패',
+                    message: '패치 파일 다운로드 중 오류가 발생했습니다.',
+                    detail: err.message
+                  });
+                }
+              );
             }
           });
         } else if (isManualCheck && mainWindow) {
