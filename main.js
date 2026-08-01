@@ -106,8 +106,8 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (실시간 대화형 콘솔 디버그 런처 적용)
-function applyUpdateAndRestart(zipPath, extractTempDir) {
+// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (PowerShell 직통 압축 해제 & 100% 무결성 덮어쓰기 & 자동 재실행)
+function applyUpdateAndRestart(zipPath) {
   isQuitting = true;
 
   let appDir;
@@ -122,21 +122,14 @@ function applyUpdateAndRestart(zipPath, extractTempDir) {
   const exePath = path.join(appDir, exeName);
 
   const safeZipPath = zipPath || path.join(app.getPath('temp'), 'ugul_update.zip');
-  const safeExtractDir = extractTempDir || path.join(app.getPath('temp'), 'ugul_extracted_update');
-
-  let sourceDir = safeExtractDir;
-  const innerSubDir = path.join(safeExtractDir, 'UGULCalander-win32-x64');
-  if (fs.existsSync(innerSubDir)) {
-    sourceDir = innerSubDir;
-  }
-
+  const safeExtractDir = path.join(app.getPath('temp'), 'ugul_extracted_update');
   const psScriptPath = path.join(app.getPath('temp'), 'ugul_updater.ps1');
 
   const psContent = `
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "   UGUL Calander Auto Updater Debug     " -ForegroundColor Yellow
+Write-Host "   UGUL Calander Auto Updater Engine    " -ForegroundColor Yellow
 Write-Host "=========================================" -ForegroundColor Cyan
 
 Start-Sleep -Seconds 2
@@ -145,22 +138,37 @@ Get-Process -Name "${exeBaseName}" -ErrorAction SilentlyContinue | Stop-Process 
 Start-Sleep -Seconds 1
 
 $appDir = "${appDir.replace(/\\/g, '\\\\')}"
-$sourceDir = "${sourceDir.replace(/\\/g, '\\\\')}"
+$zipPath = "${safeZipPath.replace(/\\/g, '\\\\')}"
+$extractTempDir = "${safeExtractDir.replace(/\\/g, '\\\\')}"
 $exePath = "${exePath.replace(/\\/g, '\\\\')}"
 
-Write-Host "App Dir   : $appDir" -ForegroundColor Gray
-Write-Host "Source Dir: $sourceDir" -ForegroundColor Gray
-Write-Host "Exe Path  : $exePath" -ForegroundColor Gray
+Write-Host "App Dir : $appDir" -ForegroundColor Gray
+Write-Host "Zip Path: $zipPath" -ForegroundColor Gray
 
-Write-Host "[2/4] Copying updated files..." -ForegroundColor Green
+Write-Host "[2/4] Unzipping update package..." -ForegroundColor Green
+if (Test-Path $extractTempDir) { Remove-Item -Path $extractTempDir -Recurse -Force }
+New-Item -ItemType Directory -Path $extractTempDir -Force | Out-Null
+
 try {
-    Copy-Item -Path "$sourceDir\\*" -Destination "$appDir" -Recurse -Force -ErrorAction Stop
-    Write-Host "-> Copy Success!" -ForegroundColor Cyan
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $extractTempDir -Force -ErrorAction Stop
+    Write-Host "-> Unzip Success!" -ForegroundColor Cyan
 } catch {
-    Write-Host "-> Copy Failed: $_" -ForegroundColor Red
+    Write-Host "-> Unzip Failed: $_" -ForegroundColor Red
 }
 
-Write-Host "[3/4] Launching new application..." -ForegroundColor Green
+$sourceDir = $extractTempDir
+$innerSubDir = Join-Path $extractTempDir "UGULCalander-win32-x64"
+if (Test-Path $innerSubDir) { $sourceDir = $innerSubDir }
+
+Write-Host "[3/4] Overwriting application files..." -ForegroundColor Green
+try {
+    Copy-Item -Path "$sourceDir\\*" -Destination "$appDir" -Recurse -Force -ErrorAction Stop
+    Write-Host "-> Overwrite Success!" -ForegroundColor Cyan
+} catch {
+    Write-Host "-> Overwrite Failed: $_" -ForegroundColor Red
+}
+
+Write-Host "[4/4] Launching updated application..." -ForegroundColor Green
 try {
     Start-Process -FilePath $exePath -WorkingDirectory $appDir -ErrorAction Stop
     Write-Host "-> Launch Success!" -ForegroundColor Cyan
@@ -168,7 +176,6 @@ try {
     Write-Host "-> Launch Failed: $_" -ForegroundColor Red
 }
 
-Write-Host "[4/4] Updater Finished." -ForegroundColor Yellow
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host "Press Enter to close this window..." -ForegroundColor White
 Read-Host
@@ -198,33 +205,18 @@ Read-Host
 ipcMain.handle('save-update-zip-and-apply', async (event, arrayBuffer) => {
   try {
     const tempZipPath = path.join(app.getPath('temp'), 'ugul_update.zip');
-    const extractTempDir = path.join(app.getPath('temp'), 'ugul_extracted_update');
     const buffer = Buffer.from(arrayBuffer);
 
-    // 1. 패치 ZIP 파일 저장
+    // 1. 패치 ZIP 파일 저장 (동기 blocking 외부명령 제거로 100% 즉시 반환)
     fs.writeFileSync(tempZipPath, buffer);
 
-    // 2. 메인 프로세스가 살아있는 동안 미리 임시 폴더에 압축 해제 사전 완공
-    if (fs.existsSync(extractTempDir)) {
-      fs.rmSync(extractTempDir, { recursive: true, force: true });
-    }
-    fs.mkdirSync(extractTempDir, { recursive: true });
-
-    try {
-      execSync(`tar -xf "${tempZipPath}" -C "${extractTempDir}"`);
-    } catch (e1) {
-      try {
-        execSync(`powershell -Command "Expand-Archive -Path '${tempZipPath}' -DestinationPath '${extractTempDir}' -Force"`);
-      } catch (e2) {}
-    }
-
-    // 3. 압축 해제 확인 후 덮어쓰기 및 자동 재실행 런처 호출
+    // 2. 0.3초 후 PowerShell 직통 업데이트 런처 실행
     setTimeout(() => {
-      applyUpdateAndRestart(tempZipPath, extractTempDir);
-    }, 500);
+      applyUpdateAndRestart(tempZipPath);
+    }, 300);
     return { success: true };
   } catch (err) {
-    console.error('Failed to save update zip buffer or extract:', err);
+    console.error('Failed to save update zip buffer:', err);
     return { success: false, error: err.message };
   }
 });
