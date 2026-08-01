@@ -106,7 +106,7 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (메인 프로세스 사전 압축 해제 & robocopy/xcopy 정밀 덮어쓰기 & 자동 재실행)
+// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (robocopy 기반 100% 무결성 덮어쓰기 & 작업 디렉토리 명시 자동 재실행)
 function applyUpdateAndRestart(zipPath, extractTempDir) {
   isQuitting = true;
 
@@ -120,6 +120,7 @@ function applyUpdateAndRestart(zipPath, extractTempDir) {
   const exeName = app.isPackaged ? path.basename(process.execPath) : 'UGULCalander.exe';
   const exePath = path.join(appDir, exeName);
   const batPath = path.join(app.getPath('temp'), 'ugul_updater.bat');
+  const logPath = path.join(app.getPath('temp'), 'ugul_updater.log');
   const backupDir = path.join(app.getPath('temp'), 'ugul_user_backup');
 
   const safeZipPath = zipPath || path.join(app.getPath('temp'), 'ugul_update.zip');
@@ -131,35 +132,46 @@ function applyUpdateAndRestart(zipPath, extractTempDir) {
     sourceDir = innerSubDir;
   }
 
+  // robocopy/xcopy 경로 끝 백슬래시 이스케이프 버그 방지
+  const cleanAppDir = appDir.replace(/\\+$/, '');
+  const cleanSourceDir = sourceDir.replace(/\\+$/, '');
+
   const batContent = `@echo off
 chcp 65001 > nul
 title UGUL Calander Auto Updater
 
-rem 1. 부모 앱 프로세스 및 실행 파일 강제 종료 (파일 락 100% 해제)
+echo [%date% %time%] Updater Started > "${logPath}"
+
+rem 1. 부모 앱 프로세스 강제 종료 (파일 락 100% 해제)
 timeout /t 2 /nobreak > nul
-taskkill /F /IM "${exeName}" > nul 2>&1
+taskkill /F /IM "${exeName}" >> "${logPath}" 2>&1
 timeout /t 1 /nobreak > nul
 
 rem 2. 사용자 데이터(events.json 및 cache) 백업
 if exist "${backupDir}" rmdir /s /q "${backupDir}"
 mkdir "${backupDir}"
-if exist "${appDir}\\events.json" copy /y "${appDir}\\events.json" "${backupDir}\\events.json" > nul
-if exist "${appDir}\\cache" xcopy /s /e /y /i "${appDir}\\cache" "${backupDir}\\cache" > nul
+if exist "${cleanAppDir}\\events.json" copy /y "${cleanAppDir}\\events.json" "${backupDir}\\events.json" >> "${logPath}" 2>&1
+if exist "${cleanAppDir}\\cache" xcopy /s /e /y /i "${cleanAppDir}\\cache" "${backupDir}\\cache" >> "${logPath}" 2>&1
 
-rem 3. 이미 풀어둔 최신 파일들을 앱 폴더로 100% 정밀 덮어쓰기
-xcopy /s /e /y /i "${sourceDir}\\*" "${appDir}\\" > nul
+rem 3. robocopy를 사용한 최신 파일 통째로 덮어쓰기 (Windows 10/11 전용 최고 속도 무결성 복사)
+robocopy "${cleanSourceDir}" "${cleanAppDir}" /E /IS /IT /NJH /NJS /nc /ns /np >> "${logPath}" 2>&1
+if errorlevel 8 (
+    xcopy /s /e /y /i "${cleanSourceDir}" "${cleanAppDir}" >> "${logPath}" 2>&1
+)
 
 rem 4. 백업해둔 사용자 데이터 100% 복원
-if exist "${backupDir}\\events.json" copy /y "${backupDir}\\events.json" "${appDir}\\events.json" > nul
-if exist "${backupDir}\\cache" xcopy /s /e /y /i "${backupDir}\\cache" "${appDir}\\cache" > nul
+if exist "${backupDir}\\events.json" copy /y "${backupDir}\\events.json" "${cleanAppDir}\\events.json" >> "${logPath}" 2>&1
+if exist "${backupDir}\\cache" xcopy /s /e /y /i "${backupDir}\\cache" "${cleanAppDir}\\cache" >> "${logPath}" 2>&1
 
 rem 5. 임시 백업/패치 파일 정리
 if exist "${backupDir}" rmdir /s /q "${backupDir}"
 if exist "${safeExtractDir}" rmdir /s /q "${safeExtractDir}"
 if exist "${safeZipPath}" del /f /q "${safeZipPath}"
 
-rem 6. 최신 앱 자동 재실행
-start "" "${exePath}"
+echo [%date% %time%] Launching new executable: "${exePath}" >> "${logPath}"
+
+rem 6. 최신 앱 작업 디렉토리 명시 후 자동 재실행
+start "" /D "${cleanAppDir}" "${exePath}"
 del /f /q "%~f0"
 `;
 
