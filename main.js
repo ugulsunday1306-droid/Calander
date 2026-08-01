@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut, shell, net } = require('electron');
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
@@ -20,50 +20,66 @@ function isNewerVersion(currentVer, latestVer) {
   return false;
 }
 
-// 스마트 리다이렉트 지원 다운로더 (GitHub Release Location Redirect 302 대응)
+// Electron net 모듈 기반 스마트 다운로더 (GitHub Release 302 Redirect & Content-Length 100% 추적)
 function downloadFile(url, destPath, onProgress, onComplete, onError) {
-  const request = (targetUrl) => {
-    https.get(targetUrl, { headers: { 'User-Agent': 'UGUL-Calander-App' } }, (res) => {
-      // 301, 302, 307 리다이렉트 처리
-      if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
-        if (res.headers.location) {
-          return request(res.headers.location);
-        }
+  try {
+    const fileStream = fs.createWriteStream(destPath);
+    const request = net.request({
+      url: url,
+      method: 'GET',
+      redirect: 'follow'
+    });
+
+    let totalBytes = 0;
+    let downloadedBytes = 0;
+
+    request.on('response', (response) => {
+      if (response.statusCode !== 200) {
+        fileStream.close();
+        fs.unlink(destPath, () => {});
+        return onError(new Error(`HTTP ${response.statusCode}`));
       }
 
-      if (res.statusCode !== 200) {
-        return onError(new Error(`Download failed with status code ${res.statusCode}`));
+      const contentLength = response.headers['content-length'];
+      if (contentLength) {
+        totalBytes = parseInt(Array.isArray(contentLength) ? contentLength[0] : contentLength, 10);
       }
 
-      const totalSize = parseInt(res.headers['content-length'] || '0', 10);
-      let downloadedSize = 0;
-      const fileStream = fs.createWriteStream(destPath);
-
-      res.on('data', (chunk) => {
-        downloadedSize += chunk.length;
-        if (totalSize > 0 && onProgress) {
-          const percent = Math.round((downloadedSize / totalSize) * 100);
+      response.on('data', (chunk) => {
+        downloadedBytes += chunk.length;
+        fileStream.write(chunk);
+        if (totalBytes > 0 && onProgress) {
+          const percent = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
           onProgress(percent);
+        } else if (onProgress) {
+          onProgress(Math.min(95, Math.round(downloadedBytes / 100000)));
         }
       });
 
-      res.pipe(fileStream);
-
-      fileStream.on('finish', () => {
-        fileStream.close(() => onComplete());
+      response.on('end', () => {
+        fileStream.end(() => {
+          if (onProgress) onProgress(100);
+          onComplete();
+        });
       });
 
-      fileStream.on('error', (err) => {
+      response.on('error', (err) => {
+        fileStream.close();
         fs.unlink(destPath, () => {});
         onError(err);
       });
-    }).on('error', (err) => {
+    });
+
+    request.on('error', (err) => {
+      fileStream.close();
       fs.unlink(destPath, () => {});
       onError(err);
     });
-  };
 
-  request(url);
+    request.end();
+  } catch (err) {
+    onError(err);
+  }
 }
 
 // 앱 재시작 및 덮어쓰기 배치 스크립트 실행

@@ -2507,3 +2507,26 @@ body.resizing-active .event-card {
   background: #818cf8;
   transform: scale(calc(var(--memo-zoom-inv, 1) * 1.2));
 }
+
+/* 토글 스위치 (.switch-toggle) 시각적 핀 이동 애니메이션 & 활성화 스타일 */
+.switch-toggle input:checked + .toggle-slider {
+  background-color: var(--color-accent, #6366f1) !important;
+  border-color: var(--color-accent, #6366f1) !important;
+}
+
+.switch-toggle .toggle-slider::before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.switch-toggle input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+}

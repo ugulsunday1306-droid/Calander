@@ -4660,24 +4660,32 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.electronAPI && window.electronAPI.send) {
           window.electronAPI.send('check-for-updates-manual');
         } else {
-          alert('현재 버전: v1.0.1 (GitHub Repository: ugulsunday1306-droid/Calander)');
+          alert('현재 버전: v1.0.3 (GitHub Repository: ugulsunday1306-droid/Calander)');
         }
       });
     }
 
     const toggleAutoLaunch = document.getElementById('toggle-auto-launch');
-    if (toggleAutoLaunch && window.electronAPI && window.electronAPI.getAutoLaunch) {
-      window.electronAPI.getAutoLaunch().then(isAutoLaunch => {
-        toggleAutoLaunch.checked = isAutoLaunch;
-      });
+    if (toggleAutoLaunch) {
+      const savedAutoLaunch = localStorage.getItem('ugul_auto_launch') === 'true';
+      toggleAutoLaunch.checked = savedAutoLaunch;
+
+      if (window.electronAPI && window.electronAPI.getAutoLaunch) {
+        window.electronAPI.getAutoLaunch().then(isAutoLaunch => {
+          if (typeof isAutoLaunch === 'boolean') {
+            toggleAutoLaunch.checked = isAutoLaunch;
+            localStorage.setItem('ugul_auto_launch', isAutoLaunch ? 'true' : 'false');
+          }
+        }).catch(() => {});
+      }
 
       toggleAutoLaunch.addEventListener('change', async (e) => {
         const enabled = e.target.checked;
-        if (window.electronAPI.setAutoLaunch) {
+        localStorage.setItem('ugul_auto_launch', enabled ? 'true' : 'false');
+        if (window.electronAPI && window.electronAPI.setAutoLaunch) {
           const success = await window.electronAPI.setAutoLaunch(enabled);
           if (!success) {
-            e.target.checked = !enabled;
-            alert('시작 프로그램 설정 변경에 실패했습니다.');
+            console.warn('Auto launch set settings returned false');
           }
         }
       });
