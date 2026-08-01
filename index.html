@@ -551,6 +551,19 @@
     </div>
   </div>
 
+  <!-- Custom In-App Latest Version Notice Modal -->
+  <div id="update-latest-modal" class="modal-overlay" style="display: none; z-index: 10000;">
+    <div class="modal-card" style="max-width: 420px; text-align: center; border: 1.5px solid var(--border-medium); box-shadow: 0 25px 70px rgba(0,0,0,0.5);">
+      <div style="font-size: 2.8rem; margin-bottom: 0.6rem;">✨</div>
+      <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.4rem;">최신 버전을 사용 중입니다!</h3>
+      <p id="update-latest-ver-info" style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.2rem;">현재 최신 버전(v1.0.6)을 사용하고 계십니다.</p>
+      
+      <div style="display: flex; justify-content: center; margin-top: 1rem;">
+        <button id="btn-close-latest-update-modal" class="btn btn-primary" style="width: 100%; font-weight: 700; padding: 0.75rem;">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Bottom Update Progress Gauge -->
   <div id="update-progress-widget" style="display: none; position: fixed; bottom: 18px; right: 20px; z-index: 10001; background: var(--bg-sidebar, #0f1624); border: 1.5px solid var(--color-accent, #6366f1); padding: 0.9rem 1.1rem; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,0.4); width: 320px; backdrop-filter: blur(12px);">
     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; margin-bottom: 0.5rem; color: var(--text-main); font-weight: 700;">

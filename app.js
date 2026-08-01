@@ -4696,6 +4696,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateVerInfo = document.getElementById('update-modal-ver-info');
     const btnStartUpdate = document.getElementById('btn-start-inapp-update');
     const btnDismissUpdate = document.getElementById('btn-dismiss-inapp-update');
+    
+    const updateLatestModal = document.getElementById('update-latest-modal');
+    const updateLatestVerInfo = document.getElementById('update-latest-ver-info');
+    const btnCloseLatestModal = document.getElementById('btn-close-latest-update-modal');
+
     const progressWidget = document.getElementById('update-progress-widget');
     const progressStatus = document.getElementById('update-progress-status');
     const progressPercent = document.getElementById('update-progress-percent');
@@ -4713,7 +4718,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (window.electronAPI.onUpdateNotAvailable) {
         window.electronAPI.onUpdateNotAvailable((msg) => {
-          alert(msg);
+          if (updateLatestModal && updateLatestVerInfo) {
+            updateLatestVerInfo.textContent = msg || '현재 최신 버전을 사용하고 계십니다.';
+            updateLatestModal.style.display = 'flex';
+          } else {
+            alert(msg);
+          }
         });
       }
 
@@ -4754,6 +4764,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnDismissUpdate) {
       btnDismissUpdate.addEventListener('click', () => {
         if (updateModal) updateModal.style.display = 'none';
+      });
+    }
+
+    if (btnCloseLatestModal) {
+      btnCloseLatestModal.addEventListener('click', () => {
+        if (updateLatestModal) updateLatestModal.style.display = 'none';
       });
     }
   }, 100);
