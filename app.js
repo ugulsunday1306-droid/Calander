@@ -4882,7 +4882,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (updateModal) updateModal.style.display = 'none';
         
         if (latestReleaseInfo && latestReleaseInfo.downloadUrl) {
-          startDirectFetchUpdate(latestReleaseInfo.downloadUrl);
+          if (window.electronAPI && window.electronAPI.startDirectUpdate) {
+            window.electronAPI.startDirectUpdate(latestReleaseInfo.downloadUrl);
+          } else {
+            startDirectFetchUpdate(latestReleaseInfo.downloadUrl);
+          }
         } else if (window.electronAPI && window.electronAPI.startDownloadUpdate) {
           if (progressWidget) progressWidget.style.display = 'block';
           window.electronAPI.startDownloadUpdate();

@@ -106,8 +106,8 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (PowerShell 직통 압축 해제 & 100% 무결성 덮어쓰기 & 자동 재실행)
-function applyUpdateAndRestart(zipPath) {
+// 독립 헬퍼 업데이터 스크립트(updater.bat) 호출 후 메인 앱 0.3초 내 즉시 종료
+function applyUpdateAndRestart(downloadUrl) {
   isQuitting = true;
 
   let appDir;
@@ -117,78 +117,16 @@ function applyUpdateAndRestart(zipPath) {
     appDir = __dirname;
   }
 
-  const exeName = app.isPackaged ? path.basename(process.execPath) : 'UGULCalander.exe';
-  const exeBaseName = exeName.replace(/\.exe$/i, '');
-  const exePath = path.join(appDir, exeName);
-
-  const safeZipPath = zipPath || path.join(app.getPath('temp'), 'ugul_update.zip');
-  const safeExtractDir = path.join(app.getPath('temp'), 'ugul_extracted_update');
-  const psScriptPath = path.join(app.getPath('temp'), 'ugul_updater.ps1');
-
-  const psContent = `
-$ErrorActionPreference = 'Continue'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "   UGUL Calander Auto Updater Engine    " -ForegroundColor Yellow
-Write-Host "=========================================" -ForegroundColor Cyan
-
-Start-Sleep -Seconds 2
-Write-Host "[1/4] Terminating existing app..." -ForegroundColor Green
-Get-Process -Name "${exeBaseName}" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 1
-
-$appDir = "${appDir.replace(/\\/g, '\\\\')}"
-$zipPath = "${safeZipPath.replace(/\\/g, '\\\\')}"
-$extractTempDir = "${safeExtractDir.replace(/\\/g, '\\\\')}"
-$exePath = "${exePath.replace(/\\/g, '\\\\')}"
-
-Write-Host "App Dir : $appDir" -ForegroundColor Gray
-Write-Host "Zip Path: $zipPath" -ForegroundColor Gray
-
-Write-Host "[2/4] Unzipping update package..." -ForegroundColor Green
-if (Test-Path $extractTempDir) { Remove-Item -Path $extractTempDir -Recurse -Force }
-New-Item -ItemType Directory -Path $extractTempDir -Force | Out-Null
-
-try {
-    Expand-Archive -LiteralPath $zipPath -DestinationPath $extractTempDir -Force -ErrorAction Stop
-    Write-Host "-> Unzip Success!" -ForegroundColor Cyan
-} catch {
-    Write-Host "-> Unzip Failed: $_" -ForegroundColor Red
-}
-
-$sourceDir = $extractTempDir
-$innerSubDir = Join-Path $extractTempDir "UGULCalander-win32-x64"
-if (Test-Path $innerSubDir) { $sourceDir = $innerSubDir }
-
-Write-Host "[3/4] Overwriting application files..." -ForegroundColor Green
-try {
-    Copy-Item -Path "$sourceDir\\*" -Destination "$appDir" -Recurse -Force -ErrorAction Stop
-    Write-Host "-> Overwrite Success!" -ForegroundColor Cyan
-} catch {
-    Write-Host "-> Overwrite Failed: $_" -ForegroundColor Red
-}
-
-Write-Host "[4/4] Launching updated application..." -ForegroundColor Green
-try {
-    Start-Process -FilePath $exePath -WorkingDirectory $appDir -ErrorAction Stop
-    Write-Host "-> Launch Success!" -ForegroundColor Cyan
-} catch {
-    Write-Host "-> Launch Failed: $_" -ForegroundColor Red
-}
-
-Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host "Press Enter to close this window..." -ForegroundColor White
-Read-Host
-`;
+  let updaterBatPath = path.join(__dirname, 'updater.bat');
+  if (!fs.existsSync(updaterBatPath)) {
+    updaterBatPath = path.join(appDir, 'resources', 'app', 'updater.bat');
+  }
+  if (!fs.existsSync(updaterBatPath)) {
+    updaterBatPath = path.join(appDir, 'updater.bat');
+  }
 
   try {
-    fs.writeFileSync(psScriptPath, psContent, 'utf-8');
-
-    spawn('powershell.exe', [
-      '-ExecutionPolicy', 'Bypass',
-      '-NoExit',
-      '-File', psScriptPath
-    ], {
+    spawn('cmd.exe', ['/c', 'start', 'UGUL Standalone Updater', updaterBatPath, downloadUrl || ''], {
       detached: true,
       stdio: 'ignore'
     }).unref();
@@ -196,11 +134,15 @@ Read-Host
     setTimeout(() => {
       if (mainWindow) mainWindow.destroy();
       app.exit(0);
-    }, 400);
+    }, 300);
   } catch (err) {
-    console.error('Failed to launch powershell updater:', err);
+    console.error('Failed to launch standalone updater:', err);
   }
 }
+
+ipcMain.on('start-direct-update', (event, downloadUrl) => {
+  applyUpdateAndRestart(downloadUrl);
+});
 
 ipcMain.handle('save-update-zip-and-apply', async (event, arrayBuffer) => {
   try {

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   send: (channel, data) => ipcRenderer.send(channel, data),
   checkForUpdates: () => ipcRenderer.send('check-for-updates-manual'),
   startDownloadUpdate: () => ipcRenderer.send('start-download-update'),
+  startDirectUpdate: (downloadUrl) => ipcRenderer.send('start-direct-update', downloadUrl),
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch: (enable) => ipcRenderer.invoke('set-auto-launch', enable),
   saveUpdateZipAndApply: (arrayBuffer) => ipcRenderer.invoke('save-update-zip-and-apply', arrayBuffer),
