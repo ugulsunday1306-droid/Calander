@@ -20,66 +20,77 @@ function isNewerVersion(currentVer, latestVer) {
   return false;
 }
 
-// Electron net 모듈 기반 스마트 다운로더 (GitHub Release 302 Redirect & Content-Length 100% 추적)
+// 철통 리다이렉트 스마트 다운로더 (GitHub 302 CDN Redirect & User-Agent & Content-Length 100% 추적)
 function downloadFile(url, destPath, onProgress, onComplete, onError) {
-  try {
-    const fileStream = fs.createWriteStream(destPath);
-    const request = net.request({
-      url: url,
-      method: 'GET',
-      redirect: 'follow'
-    });
+  const fileStream = fs.createWriteStream(destPath);
 
-    let totalBytes = 0;
-    let downloadedBytes = 0;
-
-    request.on('response', (response) => {
-      if (response.statusCode !== 200) {
-        fileStream.close();
-        fs.unlink(destPath, () => {});
-        return onError(new Error(`HTTP ${response.statusCode}`));
-      }
-
-      const contentLength = response.headers['content-length'];
-      if (contentLength) {
-        totalBytes = parseInt(Array.isArray(contentLength) ? contentLength[0] : contentLength, 10);
-      }
-
-      response.on('data', (chunk) => {
-        downloadedBytes += chunk.length;
-        fileStream.write(chunk);
-        if (totalBytes > 0 && onProgress) {
-          const percent = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
-          onProgress(percent);
-        } else if (onProgress) {
-          onProgress(Math.min(95, Math.round(downloadedBytes / 100000)));
+  const follow = (targetUrl) => {
+    try {
+      const parsedUrl = new URL(targetUrl);
+      const options = {
+        hostname: parsedUrl.hostname,
+        protocol: parsedUrl.protocol,
+        path: parsedUrl.pathname + parsedUrl.search,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': '*/*'
         }
-      });
+      };
 
-      response.on('end', () => {
-        fileStream.end(() => {
-          if (onProgress) onProgress(100);
-          onComplete();
+      https.get(options, (res) => {
+        // 301, 302, 303, 307, 308 리다이렉트 무조건 추적
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return follow(res.headers.location);
+        }
+
+        if (res.statusCode !== 200) {
+          fileStream.close();
+          fs.unlink(destPath, () => {});
+          return onError(new Error(`Download HTTP Status ${res.statusCode}`));
+        }
+
+        const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+        let downloadedBytes = 0;
+
+        res.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+          fileStream.write(chunk);
+
+          if (totalBytes > 0 && onProgress) {
+            const percent = Math.min(99, Math.round((downloadedBytes / totalBytes) * 100));
+            onProgress(percent);
+          } else if (onProgress) {
+            // content-length가 누락된 경우에도 바이트 누적 기반으로 퍼센트 실시간 상승!
+            const pseudoPercent = Math.min(99, Math.max(5, Math.round((downloadedBytes / (1024 * 1024 * 35)) * 100)));
+            onProgress(pseudoPercent);
+          }
         });
-      });
 
-      response.on('error', (err) => {
+        res.on('end', () => {
+          fileStream.end(() => {
+            if (onProgress) onProgress(100);
+            onComplete();
+          });
+        });
+
+        res.on('error', (err) => {
+          fileStream.close();
+          fs.unlink(destPath, () => {});
+          onError(err);
+        });
+      }).on('error', (err) => {
         fileStream.close();
         fs.unlink(destPath, () => {});
         onError(err);
       });
-    });
-
-    request.on('error', (err) => {
+    } catch (err) {
       fileStream.close();
       fs.unlink(destPath, () => {});
       onError(err);
-    });
+    }
+  };
 
-    request.end();
-  } catch (err) {
-    onError(err);
-  }
+  follow(url);
 }
 
 // 앱 재시작 및 덮어쓰기 배치 스크립트 실행
