@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Runtime data & Cache
+cache/
+events.json
+*.log
+
+# OS Generated
+.DS_Store
+Thumbs.db

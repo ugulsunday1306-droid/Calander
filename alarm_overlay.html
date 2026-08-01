@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>일정 알람</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      overflow: hidden;
+      -webkit-app-region: drag;
+    }
+    
+    /* Background Glowing Orbs for Refraction */
+    .glow-bg {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      overflow: hidden;
+      z-index: 1;
+      pointer-events: none;
+    }
+    
+    .glow-circle {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(55px);
+      opacity: 0.5;
+      animation: floatGlow 10s infinite alternate ease-in-out;
+    }
+    
+    .glow-1 {
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle, rgba(129, 140, 248, 0.8) 0%, rgba(129, 140, 248, 0) 70%);
+      top: -60px;
+      left: -60px;
+    }
+    
+    .glow-2 {
+      width: 240px;
+      height: 240px;
+      background: radial-gradient(circle, rgba(192, 132, 252, 0.8) 0%, rgba(192, 132, 252, 0) 70%);
+      bottom: -60px;
+      right: -60px;
+      animation-delay: -5s;
+    }
+    
+    @keyframes floatGlow {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(40px, 30px) scale(1.2); }
+    }
+    
+    /* Frosted Glassmorphism Card (Improved Contrast/Opacity for readability) */
+    .alarm-card {
+      width: 440px;
+      height: 340px;
+      background: #0b0e17; /* Completely opaque deep slate background */
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 24px;
+      padding: 2.2rem 2rem;
+      text-align: center;
+      color: #fff;
+      box-shadow: 
+        0 24px 70px rgba(0, 0, 0, 0.65), 
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+        0 0 40px rgba(129, 140, 248, 0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 2;
+    }
+    
+    @keyframes popIn {
+      0% { transform: scale(0.85); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    
+    .header-tag {
+      font-size: 0.72rem;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      color: #a5b4fc;
+      opacity: 0.9;
+      -webkit-app-region: drag;
+    }
+    
+    .bell-icon-wrapper {
+      position: relative;
+      width: 70px;
+      height: 70px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.4rem;
+      box-shadow: 
+        inset 0 1px 2px rgba(255, 255, 255, 0.2),
+        0 8px 24px rgba(0, 0, 0, 0.15);
+      -webkit-app-region: drag;
+    }
+    
+    .bell-icon {
+      font-size: 2.2rem;
+      animation: ring 0.6s infinite alternate ease-in-out;
+      z-index: 2;
+    }
+    
+    @keyframes ring {
+      0% { transform: rotate(-16deg); }
+      100% { transform: rotate(16deg); }
+    }
+    
+    .wave {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 1.5px solid rgba(165, 180, 252, 0.4);
+      animation: pulseWave 2s infinite ease-out;
+      z-index: 1;
+    }
+    .wave-1 { animation-delay: 0s; }
+    .wave-2 { animation-delay: 0.7s; }
+    
+    @keyframes pulseWave {
+      0% { transform: scale(0.85); opacity: 0.9; }
+      100% { transform: scale(2.1); opacity: 0; }
+    }
+    
+    .text-container {
+      width: 100%;
+      -webkit-app-region: drag;
+    }
+    
+    .title-text {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 1.55rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.4rem;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: -0.5px;
+    }
+    
+    .time-text {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      opacity: 0.95;
+      margin-bottom: 0.4rem;
+      letter-spacing: 0.5px;
+    }
+    
+    .desc-text {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: #e2e8f0; /* Brighter Slate for higher legibility against bright backgrounds */
+      max-height: 44px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.45;
+    }
+    
+    .actions-row {
+      display: flex;
+      gap: 0.8rem;
+      width: 100%;
+      -webkit-app-region: no-drag;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 0.8rem;
+      border-radius: 12px;
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      outline: none;
+    }
+    
+    .btn-snooze {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #f1f5f9;
+      box-shadow: 
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .btn-snooze:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    
+    .btn-snooze:active {
+      transform: scale(0.97);
+    }
+    
+    .btn-dismiss {
+      background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      box-shadow: 
+        inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        0 8px 24px rgba(244, 63, 94, 0.35);
+    }
+    
+    .btn-dismiss:hover {
+      transform: translateY(-1.5px);
+      box-shadow: 
+        inset 0 1px 0 rgba(255, 255, 255, 0.35),
+        0 12px 30px rgba(244, 63, 94, 0.5);
+    }
+    
+    .btn-dismiss:active {
+      transform: translateY(0) scale(0.97);
+    }
+  </style>
+</head>
+<body>
+  <!-- Ambient background glow circles for glass refraction -->
+  <div class="glow-bg">
+    <div class="glow-circle glow-1"></div>
+    <div class="glow-circle glow-2"></div>
+  </div>
+
+  <div class="alarm-card">
+    <div class="header-tag">Upcoming Schedule</div>
+    
+    <div class="bell-icon-wrapper">
+      <div class="bell-icon">⏰</div>
+      <div class="wave wave-1"></div>
+      <div class="wave wave-2"></div>
+    </div>
+    
+    <div class="text-container">
+      <div id="alarm-title" class="title-text">일정 제목</div>
+      <div id="alarm-time" class="time-text">10:00 - 11:30</div>
+      <div id="alarm-desc" class="desc-text">상세 정보 설명 영역</div>
+    </div>
+    
+    <div class="actions-row">
+      <button id="btn-snooze" class="btn btn-snooze">5분 미루기</button>
+      <button id="btn-dismiss" class="btn btn-dismiss">알람 끄기</button>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    document.getElementById('alarm-title').textContent = params.get('title') || '일정 알람';
+    document.getElementById('alarm-time').textContent = params.get('time') || '';
+    document.getElementById('alarm-desc').textContent = params.get('desc') || '';
+    const isTest = params.get('isTest') === 'true';
+    
+    let audioCtx = null;
+    let soundInterval = null;
+    
+    function playAlarmSound() {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        if (!audioCtx) audioCtx = new AudioContextClass();
+        
+        function playTone(freq, duration, startTime) {
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, startTime);
+          
+          gainNode.gain.setValueAtTime(0.15, startTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+          
+          osc.start(startTime);
+          osc.stop(startTime + duration);
+        }
+        
+        const now = audioCtx.currentTime;
+        playTone(880, 0.4, now);
+        playTone(1046.5, 0.4, now + 0.15);
+        playTone(1318.5, 0.6, now + 0.3);
+      } catch(e) {
+        console.error('Failed to play audio chime:', e);
+      }
+    }
+    
+    function startSoundLoop() {
+      playAlarmSound();
+      soundInterval = setInterval(playAlarmSound, 2500);
+    }
+    
+    function stopSoundLoop() {
+      if (soundInterval) {
+        clearInterval(soundInterval);
+        soundInterval = null;
+      }
+    }
+    
+    startSoundLoop();
+    
+    // 5분(300,000ms) 동안 반응이 없으면 자동으로 알람을 종료하는 타이머 설정 (테스트 알람은 5초)
+    const dismissDuration = isTest ? 5000 : 300000;
+    const autoDismissTimeout = setTimeout(() => {
+      stopSoundLoop();
+      if (window.electronAPI && typeof window.electronAPI.dismissAlarm === 'function') {
+        window.electronAPI.dismissAlarm();
+      } else {
+        window.close();
+      }
+    }, dismissDuration);
+    
+    document.getElementById('btn-dismiss').addEventListener('click', () => {
+      clearTimeout(autoDismissTimeout);
+      stopSoundLoop();
+      if (window.electronAPI && typeof window.electronAPI.dismissAlarm === 'function') {
+        window.electronAPI.dismissAlarm();
+      } else {
+        window.close();
+      }
+    });
+    
+    document.getElementById('btn-snooze').addEventListener('click', () => {
+      clearTimeout(autoDismissTimeout);
+      stopSoundLoop();
+      if (window.electronAPI && typeof window.electronAPI.snoozeAlarm === 'function') {
+        window.electronAPI.snoozeAlarm();
+      } else {
+        window.close();
+      }
+    });
+  </script>
+</body>
+</html>

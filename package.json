@@ -1,0 +1,14 @@
+{
+  "name": "schedule-planner",
+  "version": "1.0.1",
+  "description": "Premium 10-minute drag-to-select schedule organizer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . UGULCalander --platform=win32 --arch=x64 --overwrite"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-packager": "^17.1.2"
+  }
+}

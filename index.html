@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UGUL Calander</title>
+
+  <!-- Lucide Icons -->
+  <script src="lucide.min.js"></script>
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Sidebar: Controls & Presets -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-icon-wrapper" id="brand-logo-container" title="클릭하여 로고 이미지 변경 (우클릭: 기본 아이콘)">
+          <div class="logo-icon" id="logo-icon-box">
+            <i data-lucide="clock"></i>
+          </div>
+          <div class="logo-hover-overlay">
+            <i data-lucide="camera" style="width: 13px; height: 13px;"></i>
+          </div>
+        </div>
+        <input type="file" id="logo-image-input" accept="image/png, image/jpeg, image/jpg" style="display: none;">
+
+        <div class="brand-text">
+          <div class="app-title-container" title="클릭하여 타이틀 수정">
+            <h1 id="app-title-display">UGUL Calander</h1>
+            <input type="text" id="app-title-input" class="app-title-edit-input hide" value="UGUL Calander">
+          </div>
+        </div>
+      </div>
+
+      <!-- Calendar Week Navigation -->
+      <div class="nav-section">
+        <h3 class="section-title">주간 탐색</h3>
+        <div class="week-picker">
+          <button id="prev-week-btn" class="icon-btn" title="이전 주">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <div class="current-week-label">
+            <span id="current-month">7월</span>
+            <span id="current-week-range">06일 - 12일</span>
+          </div>
+          <button id="next-week-btn" class="icon-btn" title="다음 주">
+            <i data-lucide="chevron-right"></i>
+          </button>
+        </div>
+        <button id="today-btn" class="btn btn-secondary btn-full btn-today">
+          <i data-lucide="calendar-days"></i><span>오늘로 이동</span>
+        </button>
+      </div>
+
+      <!-- Search & Filters -->
+      <div class="nav-section">
+        <h3 class="section-title">일정 검색</h3>
+        <div class="search-box">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="search-input" class="search-input" placeholder="검색어 입력...">
+        </div>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="nav-section">
+        <h3 class="section-title">카테고리</h3>
+        <div class="categories-list">
+          <label class="category-item">
+            <input type="checkbox" checked value="work" class="cat-checkbox" data-color="var(--cat-work)">
+            <span class="dot dot-work"></span>
+            <span class="cat-name">업무 / 프로젝트</span>
+          </label>
+          <label class="category-item">
+            <input type="checkbox" checked value="study" class="cat-checkbox" data-color="var(--cat-study)">
+            <span class="dot dot-study"></span>
+            <span class="cat-name">학습 / 연구</span>
+          </label>
+          <label class="category-item">
+            <input type="checkbox" checked value="personal" class="cat-checkbox" data-color="var(--cat-personal)">
+            <span class="dot dot-personal"></span>
+            <span class="cat-name">개인 / 생활</span>
+          </label>
+          <label class="category-item">
+            <input type="checkbox" checked value="health" class="cat-checkbox" data-color="var(--cat-health)">
+            <span class="dot dot-health"></span>
+            <span class="cat-name">건강 / 휴식</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Environment Settings & Options Button -->
+      <div class="nav-section">
+        <button id="btn-open-options" class="btn btn-secondary btn-full options-trigger-btn" style="display: flex; align-items: center; justify-content: center; gap: 0.55rem; padding: 0.7rem; font-weight: 600; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-medium); border-radius: 10px; color: var(--text-main); cursor: pointer; transition: all 0.2s ease;">
+          <i data-lucide="settings" style="width: 16px; height: 16px; color: #a5b4fc;"></i>
+          <span>환경설정 및 옵션</span>
+        </button>
+      </div>
+
+      <!-- Quick Templates -->
+      <div class="nav-section quick-templates-section">
+        <div class="section-header-inline">
+          <h3 class="section-title">빠른 템플릿</h3>
+          <span class="tooltip-trigger" title="템플릿을 선택한 뒤 스케줄러 그리드를 클릭하면 일정이 빠르게 생성됩니다.">
+            <i data-lucide="help-circle"></i>
+          </span>
+        </div>
+        <div class="template-instructions">템플릿 선택 후 그리드 클릭 시 즉시 입력</div>
+        <div class="templates-grid">
+          <button class="template-card" data-title="업무 및 협업" data-duration="60" data-category="work">
+            <div class="template-header">
+              <span class="dot dot-work"></span>
+              <span class="template-title">업무 회의</span>
+            </div>
+            <span class="template-duration">60분</span>
+          </button>
+          <button class="template-card" data-title="코딩 및 개발" data-duration="120" data-category="work">
+            <div class="template-header">
+              <span class="dot dot-work"></span>
+              <span class="template-title">개발 집중</span>
+            </div>
+            <span class="template-duration">120분</span>
+          </button>
+          <button class="template-card" data-title="독서 및 외국어" data-duration="40" data-category="study">
+            <div class="template-header">
+              <span class="dot dot-study"></span>
+              <span class="template-title">개인 학습</span>
+            </div>
+            <span class="template-duration">40분</span>
+          </button>
+          <button class="template-card" data-title="점심 식사" data-duration="60" data-category="personal">
+            <div class="template-header">
+              <span class="dot dot-personal"></span>
+              <span class="template-title">점심 식사</span>
+            </div>
+            <span class="template-duration">60분</span>
+          </button>
+          <button class="template-card" data-title="스트레칭 및 운동" data-duration="30" data-category="health">
+            <div class="template-header">
+              <span class="dot dot-health"></span>
+              <span class="template-title">가벼운 운동</span>
+            </div>
+            <span class="template-duration">30분</span>
+          </button>
+          <button class="template-card" data-title="명상 및 휴식" data-duration="20" data-category="health">
+            <div class="template-header">
+              <span class="dot dot-health"></span>
+              <span class="template-title">수분 섭취/휴식</span>
+            </div>
+            <span class="template-duration">20분</span>
+          </button>
+        </div>
+        <button id="cancel-template-btn" class="btn btn-secondary btn-sm btn-full hide">
+          템플릿 선택 취소
+        </button>
+      </div>
+
+      <!-- App Info / Usage Stats -->
+      <div class="sidebar-footer">
+        <div class="stats-panel">
+          <div class="stat-item">
+            <span class="stat-value" id="stat-total-events">0</span>
+            <span class="stat-label">이번 주 일정</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-total-hours">0h</span>
+            <span class="stat-label">계획된 시간</span>
+          </div>
+        </div>
+        <div class="drag-hint">
+          <i data-lucide="info"></i>
+          <span>그리드를 10분 단위로 세로로 드래그하여 일정을 대입해보세요.</span>
+        </div>
+        <div style="margin-top: 0.8rem; width: 100%;">
+          <button id="test-alarm-btn" class="btn btn-secondary btn-sm btn-full" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 0.5rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.4rem; outline: none; width: 100%;">
+            <i data-lucide="bell" style="width: 13px; height: 13px;"></i>
+            <span>알람 작동 테스트</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area: Slider Pages (Calendar & PureRef Canvas) -->
+    <main class="main-content">
+      
+      <div class="view-slider" id="view-slider">
+        
+        <!-- Page 1: Calendar View -->
+        <div class="view-page calendar-view-page" id="calendar-view-page">
+          <!-- Navigation Arrow Overlay: Go to Memo Page -->
+          <button id="btn-goto-memo" class="nav-overlay-btn goto-memo-btn" title="메모장으로 이동">
+            <span>메모장</span>
+            <i data-lucide="chevron-right"></i>
+          </button>
+
+          <!-- Calendar View Wrapper -->
+          <div class="calendar-wrapper">
+            <!-- Grid Header: Days of the week -->
+            <div class="calendar-header" id="calendar-header">
+              <div class="time-header-cell">시간</div>
+              <div class="day-header-cell" data-day-idx="0">월 <span class="header-date">-</span></div>
+              <div class="day-header-cell" data-day-idx="1">화 <span class="header-date">-</span></div>
+              <div class="day-header-cell" data-day-idx="2">수 <span class="header-date">-</span></div>
+              <div class="day-header-cell" data-day-idx="3">목 <span class="header-date">-</span></div>
+              <div class="day-header-cell" data-day-idx="4">금 <span class="header-date">-</span></div>
+              <div class="day-header-cell day-sat" data-day-idx="5">토 <span class="header-date">-</span></div>
+              <div class="day-header-cell day-sun" data-day-idx="6">일 <span class="header-date">-</span></div>
+            </div>
+
+            <!-- Grid Body: Time Rows & Columns (Scrollable) -->
+            <div class="calendar-body-scroll" id="calendar-body-scroll">
+              <div class="calendar-body-relative">
+                <!-- Grid Background Lines -->
+                <div class="grid-lines-container" id="grid-lines-container">
+                  <!-- Dynamically generated hour markers and lines -->
+                </div>
+
+                <!-- Interactivity Columns (where the dragging happens) -->
+                <div class="grid-columns-container" id="grid-columns-container">
+                  <!-- 1 Time Label Column + 7 Day Columns -->
+                  <div class="time-column-labels" id="time-column-labels">
+                    <!-- Dynamically generated hour labels -->
+                  </div>
+                  
+                  <!-- 7 Columns for Mon-Sun, each holding 10-minute slots -->
+                  <div class="day-columns-wrapper" id="day-columns-wrapper">
+                    <!-- Dynamically generated -->
+                  </div>
+                </div>
+
+                <!-- Event Overlay Container (rendered absolutely) -->
+                <div class="events-overlay-container" id="events-overlay-container">
+                  <!-- Dynamically rendered event cards -->
+                </div>
+
+                <!-- Visual Drag Indicator (ghost/preview box during drag) -->
+                <div class="drag-preview-box hide" id="drag-preview-box"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Page 2: Canvas Memo View -->
+        <div class="view-page memo-view-page" id="memo-view-page">
+          <!-- Navigation Arrow Overlay: Back to Calendar -->
+          <button id="btn-goto-calendar" class="nav-overlay-btn goto-calendar-btn" title="캘린더 시간표로 돌아가기">
+            <i data-lucide="chevron-left"></i>
+            <span>캘린더</span>
+          </button>
+
+          <!-- Memo Top Bar -->
+          <div class="memo-topbar">
+            <div class="memo-title-area">
+              <i data-lucide="layout" style="width: 18px; height: 18px; color: #a5b4fc;"></i>
+              <span style="font-weight: 700; font-size: 0.95rem; color: #fff;">메모장</span>
+            </div>
+            <div class="memo-hint-area">
+              <span>💡 Ctrl+V: 이미지/텍스트 붙여넣기 | 더블클릭: 메모작성 | 마우스 드래그: 위치 이동</span>
+            </div>
+            <div class="memo-actions-area">
+              <button id="btn-clear-memo" class="btn btn-secondary btn-sm" style="padding: 0.35rem 0.7rem; font-size: 0.75rem; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5;">
+                <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i>
+                <span>전체 메모 삭제</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Memo Infinite Canvas Viewport -->
+          <div class="memo-canvas-scroll" id="memo-canvas-scroll">
+            <div class="memo-canvas-viewport" id="memo-canvas-viewport">
+              <div class="memo-canvas-board" id="memo-canvas-board"></div>
+              <!-- Dynamically generated PureRef text and image cards -->
+            </div>
+          </div>
+
+          <!-- Canvas Zoom Badge Indicator -->
+          <div id="memo-zoom-badge" class="memo-zoom-badge" title="마우스 휠로 화면 확대/축소 (클릭 시 100% 리셋)">100%</div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Event Dialog Modal (Create / Edit) -->
+  <div class="modal-overlay hide" id="event-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-title-text">새 일정 추가</h2>
+        <button id="close-modal-btn" class="icon-btn">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <form id="event-form">
+        <input type="hidden" id="event-id">
+        <input type="hidden" id="event-day">
+        
+        <div class="form-group">
+          <label for="event-title">일정명</label>
+          <input type="text" id="event-title" required placeholder="예: 디자인 회의, 알고리즘 공부">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>날짜</label>
+            <div class="static-input-val" id="event-date-formatted">2026년 7월 6일 (월)</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="event-start-time">시작 시간</label>
+            <select id="event-start-time" class="time-select"></select>
+          </div>
+          <div class="form-group">
+            <label for="event-end-time">종료 시간</label>
+            <select id="event-end-time" class="time-select"></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="category-label-wrapper" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+            <label style="margin-bottom:0;">카테고리</label>
+            <span style="font-size:0.72rem; color:var(--text-muted); font-weight:500;">💡 우클릭 시 RGB 색상 변경</span>
+          </div>
+          <input type="color" id="cat-rgb-picker" style="display:none;">
+          <div class="category-radio-group">
+            <label class="cat-radio-label" data-cat="work" title="우클릭 시 업무 색상 RGB 지정">
+              <input type="radio" name="event-category" value="work" checked>
+              <span class="custom-radio cat-work-radio"></span>
+              <span>업무</span>
+            </label>
+            <label class="cat-radio-label" data-cat="study" title="우클릭 시 학습 색상 RGB 지정">
+              <input type="radio" name="event-category" value="study">
+              <span class="custom-radio cat-study-radio"></span>
+              <span>학습</span>
+            </label>
+            <label class="cat-radio-label" data-cat="personal" title="우클릭 시 생활 색상 RGB 지정">
+              <input type="radio" name="event-category" value="personal">
+              <span class="custom-radio cat-personal-radio"></span>
+              <span>생활</span>
+            </label>
+            <label class="cat-radio-label" data-cat="health" title="우클릭 시 건강 색상 RGB 지정">
+              <input type="radio" name="event-category" value="health">
+              <span class="custom-radio cat-health-radio"></span>
+              <span>건강</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="event-alarm">알람 설정</label>
+          <select id="event-alarm" class="alarm-select" style="width: 100%; padding: 0.6rem; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: #fff; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s; outline: none;">
+            <option value="none" style="background: #0f1624;">알람 없음</option>
+            <option value="0" style="background: #0f1624;">정각 (0분 전)</option>
+            <option value="5" style="background: #0f1624;">5분 전</option>
+            <option value="10" style="background: #0f1624;">10분 전</option>
+            <option value="15" style="background: #0f1624;">15분 전</option>
+            <option value="30" style="background: #0f1624;">30분 전</option>
+            <option value="60" style="background: #0f1624;">1시간 전</option>
+            <option value="120" style="background: #0f1624;">2시간 전</option>
+            <option value="1440" style="background: #0f1624;">1일 전</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="event-desc">설명 (메모)</label>
+          <textarea id="event-desc" rows="3" placeholder="상세한 일정을 입력해보세요."></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="delete-event-btn" class="btn btn-danger hide">
+            <i data-lucide="trash-2"></i> 삭제
+          </button>
+          <div class="modal-actions-right">
+            <button type="button" id="cancel-modal-btn" class="btn btn-secondary">취소</button>
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="check"></i> 저장
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Fullscreen Ringing Overlay -->
+  <div id="ringing-overlay" class="ringing-overlay hide">
+    <div class="ringing-content">
+      <div class="alarm-bell-container">
+        <i data-lucide="bell" class="alarm-bell-icon"></i>
+        <div class="wave wave-1"></div>
+        <div class="wave wave-2"></div>
+        <div class="wave wave-3"></div>
+      </div>
+      <h2 id="ringing-title">일정 알람!</h2>
+      <h1 id="ringing-event-title">회의 준비하기</h1>
+      <p id="ringing-event-time">10:00 - 11:30</p>
+      <p id="ringing-event-desc">회의 자료 출력 및 검토</p>
+      <div class="ringing-actions">
+        <button id="btn-ringing-snooze" class="btn-snooze">
+          <i data-lucide="hourglass"></i> 5분 뒤 다시 알림 (Snooze)
+        </button>
+        <button id="btn-ringing-dismiss" class="btn-dismiss">
+          <i data-lucide="power"></i> 알람 끄기 (Dismiss)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom App Confirmation Modal (e.g., Clear All Memos) -->
+  <div class="modal-overlay hide" id="custom-confirm-modal">
+    <div class="modal-card" style="max-width: 400px; text-align: center;">
+      <div style="font-size: 2.2rem; margin-bottom: 0.6rem;">⚠️</div>
+      <h3 style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.4rem;" id="confirm-modal-title">전체 메모 삭제</h3>
+      <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.4rem; line-height: 1.45;" id="confirm-modal-desc">메모장의 모든 노트를 정말로 삭제하시겠습니까?<br>삭제된 데이터는 복구할 수 없습니다.</p>
+      <div style="display: flex; gap: 0.8rem; justify-content: center;">
+        <button id="confirm-modal-cancel-btn" class="btn btn-secondary" style="flex: 1; padding: 0.6rem; font-size: 0.85rem; border-radius: 8px;">취소</button>
+        <button id="confirm-modal-ok-btn" class="btn btn-danger" style="flex: 1; padding: 0.6rem; font-size: 0.85rem; background: linear-gradient(135deg, #ef4444, #dc2626); border: none; color: #fff; font-weight: 700; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 14px rgba(239,68,68,0.35);">삭제하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Options & Settings Modal -->
+  <div class="modal-overlay hide" id="app-options-modal">
+    <div class="modal-card options-modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <i data-lucide="settings" style="width: 20px; height: 20px; color: var(--color-accent);"></i>
+          <h2>환경설정 및 옵션</h2>
+        </div>
+        <button class="icon-btn modal-close-btn" id="close-options-modal-btn">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="options-modal-body">
+        <!-- Option 1: Theme Presets -->
+        <div class="options-section">
+          <h4 class="options-section-title">
+            <i data-lucide="palette"></i>
+            <span>기본 테마 프리셋</span>
+          </h4>
+          <div class="theme-picker" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+            <button class="theme-btn active" data-theme="slate" style="background: #6366f1;" title="슬레이트 인디고"></button>
+            <button class="theme-btn" data-theme="rose" style="background: #ec4899;" title="로즈 핑크"></button>
+            <button class="theme-btn" data-theme="red" style="background: #ef4444;" title="크림슨 레드"></button>
+            <button class="theme-btn" data-theme="purple" style="background: #a855f7;" title="바이올렛 퍼플"></button>
+            <button class="theme-btn" data-theme="forest" style="background: #10b981;" title="포레스트 그린"></button>
+            <button class="theme-btn" data-theme="sunset" style="background: #f97316;" title="선셋 오렌지"></button>
+            <button class="theme-btn" data-theme="royal" style="background: #eab308;" title="로열 골드"></button>
+            <button class="theme-btn" data-theme="cyan" style="background: #06b6d4;" title="오션 시안"></button>
+            <button class="theme-btn" data-theme="mono-dark" style="background: linear-gradient(135deg, #080808 0%, #262626 100%); border: 1px solid #525252;" title="모노톤 블랙 (100% Saturation 0 Gray)"></button>
+            <button class="theme-btn" data-theme="mono-gray" style="background: linear-gradient(135deg, #171717 0%, #8c8c8c 100%); border: 1px solid #525252;" title="모노톤 그레이 (100% Saturation 0 Gray)"></button>
+            <button class="theme-btn" data-theme="mono-white" style="background: linear-gradient(135deg, #ffffff 0%, #cccccc 100%); border: 1px solid #a3a3a3;" title="모노톤 화이트 (100% Saturation 0 Gray)"></button>
+          </div>
+        </div>
+
+        <!-- Option 3: Custom Color Pickers -->
+        <div class="options-section">
+          <h4 class="options-section-title">
+            <i data-lucide="sliders"></i>
+            <span>커스텀 RGB 색상 지정</span>
+          </h4>
+          <div class="custom-colors-grid" style="display: flex; flex-direction: column; gap: 0.65rem;">
+            <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; color: var(--text-main);">
+              <span>포인트 (강조 색상)</span>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <input type="color" id="picker-accent" style="width: 34px; height: 26px; border: 1px solid var(--border-light); border-radius: 4px; cursor: pointer; background: none; padding: 0;">
+                <span id="label-accent" style="font-family: monospace; font-size: 0.72rem; color: var(--text-muted);">#6366F1</span>
+              </div>
+            </div>
+            <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; color: var(--text-main);">
+              <span>사이드바 배경 색상</span>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <input type="color" id="picker-sidebar" style="width: 34px; height: 26px; border: 1px solid var(--border-light); border-radius: 4px; cursor: pointer; background: none; padding: 0;">
+                <span id="label-sidebar" style="font-family: monospace; font-size: 0.72rem; color: var(--text-muted);">#0F1624</span>
+              </div>
+            </div>
+            <div class="color-picker-item" style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; color: var(--text-main);">
+              <span>시간표 그리드 배경 색상</span>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <input type="color" id="picker-grid" style="width: 34px; height: 26px; border: 1px solid var(--border-light); border-radius: 4px; cursor: pointer; background: none; padding: 0;">
+                <span id="label-grid" style="font-family: monospace; font-size: 0.72rem; color: var(--text-muted);">#0D121F</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Option 4: Global Hotkey Assignment -->
+        <div class="options-section">
+          <h4 class="options-section-title">
+            <i data-lucide="command"></i>
+            <span>대시보드 호출 전역 단축키</span>
+          </h4>
+          <div style="display: flex; gap: 0.4rem; align-items: center; width: 100%;">
+            <input type="text" id="shortcut-input" placeholder="클릭 후 단축키 누르기 (예: Ctrl+Shift+A)" readonly style="flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.5rem 0.6rem; font-size: 0.78rem; color: #a5b4fc; text-align: center; cursor: pointer; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+            <button id="btn-clear-shortcut" class="icon-btn" title="단축키 해제" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text-muted); cursor: pointer;">
+              <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Option 5: GitHub Update Check -->
+        <div class="options-section">
+          <h4 class="options-section-title">
+            <i data-lucide="refresh-cw"></i>
+            <span>버전 정보 및 업데이트</span>
+          </h4>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">현재 버전: v1.0.0 (GitHub 배포)</span>
+            <button type="button" id="btn-check-update" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 0.4rem;">
+              <i data-lucide="github" style="width: 14px; height: 14px;"></i> 업데이트 확인
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="margin-top: 1rem;">
+        <button class="btn btn-primary btn-full" id="btn-close-options-confirm">확인 및 완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Script -->
+  <script src="app.js"></script>
+</body>
+</html>
