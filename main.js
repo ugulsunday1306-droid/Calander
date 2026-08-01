@@ -93,7 +93,7 @@ function downloadFile(url, destPath, onProgress, onComplete, onError) {
   follow(url);
 }
 
-// 앱 재시작 및 덮어쓰기 배치 스크립트 실행
+// 앱 재시작 및 덮어쓰기 배치 스크립트 실행 (사용자 데이터 events.json 및 cache 100% 보존 철통 쉴드)
 function applyUpdateAndRestart(zipPath) {
   let appDir;
   if (app.isPackaged) {
@@ -104,12 +104,29 @@ function applyUpdateAndRestart(zipPath) {
 
   const exeName = app.isPackaged ? path.basename(process.execPath) : 'UGULCalander.exe';
   const batPath = path.join(app.getPath('temp'), 'ugul_updater.bat');
+  const backupDir = path.join(app.getPath('temp'), 'ugul_user_backup');
 
-  // Windows PowerShell Expand-Archive를 사용하여 압축 프로그램 실행 없이 강제 덮어쓰기 후 앱 재실행
   const batContent = `@echo off
 chcp 65001 > nul
 timeout /t 2 /nobreak > nul
+
+rem 1. 기존 사용자 데이터(events.json, cache) 백업 디렉토리 준비
+if exist "${backupDir}" rmdir /s /q "${backupDir}"
+mkdir "${backupDir}"
+
+rem 2. 사용자의 소중한 기존 데이터 임시 안전 이동/백업
+if exist "${appDir}\\events.json" copy /y "${appDir}\\events.json" "${backupDir}\\events.json" > nul
+if exist "${appDir}\\cache" xcopy /s /e /y /i "${appDir}\\cache" "${backupDir}\\cache" > nul
+
+rem 3. 최신 패치 파일 압축 해제 (앱 리소스 덮어쓰기)
 powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${appDir}' -Force"
+
+rem 4. 백업해둔 사용자 데이터 100% 원복 (덮어쓰기 방지 철통 보존!)
+if exist "${backupDir}\\events.json" copy /y "${backupDir}\\events.json" "${appDir}\\events.json" > nul
+if exist "${backupDir}\\cache" xcopy /s /e /y /i "${backupDir}\\cache" "${appDir}\\cache" > nul
+
+rem 5. 임시 백업 및 패치 파일 정리 후 앱 자동 재실행
+if exist "${backupDir}" rmdir /s /q "${backupDir}"
 del /f /q "${zipPath}"
 start "" "${path.join(appDir, exeName)}"
 del /f /q "%~f0"
