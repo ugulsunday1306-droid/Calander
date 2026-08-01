@@ -65,8 +65,13 @@
 
       <!-- Category Filter -->
       <div class="nav-section">
-        <h3 class="section-title">카테고리</h3>
-        <div class="categories-list">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+          <h3 class="section-title" style="margin: 0;">카테고리</h3>
+          <button type="button" id="btn-sidebar-add-category" class="icon-btn" title="새 카테고리 추가" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.08); border: 1px solid var(--border-light); border-radius: 6px; color: var(--text-main); cursor: pointer; transition: all 0.2s;">
+            <i data-lucide="plus" style="width: 14px; height: 14px;"></i>
+          </button>
+        </div>
+        <div class="categories-list" id="sidebar-categories-list">
           <label class="category-item">
             <input type="checkbox" checked value="work" class="cat-checkbox" data-color="var(--cat-work)">
             <span class="dot dot-work"></span>
@@ -87,6 +92,7 @@
             <span class="dot dot-health"></span>
             <span class="cat-name">건강 / 휴식</span>
           </label>
+          <div id="sidebar-dynamic-categories" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
         </div>
       </div>
 
@@ -321,7 +327,12 @@
 
         <div class="form-group">
           <div class="category-label-wrapper" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
-            <label style="margin-bottom:0;">카테고리</label>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label style="margin-bottom:0;">카테고리</label>
+              <button type="button" id="btn-open-add-category" class="icon-btn" title="새 카테고리 추가" style="width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.08); border: 1px solid var(--border-light); border-radius: 5px; color: var(--text-main); cursor: pointer; transition: all 0.2s;">
+                <i data-lucide="plus" style="width: 13px; height: 13px;"></i>
+              </button>
+            </div>
             <span style="font-size:0.72rem; color:var(--text-muted); font-weight:500;">💡 우클릭 시 RGB 색상 변경</span>
           </div>
           <input type="color" id="cat-rgb-picker" style="display:none;">
@@ -346,6 +357,8 @@
               <span class="custom-radio cat-health-radio"></span>
               <span>건강</span>
             </label>
+            <!-- 사용자 동적 카테고리 컨테이너 -->
+            <div id="dynamic-category-chips-container" style="display: inline-flex; gap: 0.4rem; flex-wrap: wrap;"></div>
           </div>
         </div>
 
@@ -523,7 +536,7 @@
             <span>버전 정보 및 업데이트</span>
           </h4>
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 0.8rem; color: var(--text-muted);">현재 버전: v1.0.7 (최종 완료본)</span>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">현재 버전: v1.0.8 (카테고리 동적 추가 지원)</span>
             <button type="button" id="btn-check-update" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 0.4rem;">
               <i data-lucide="github" style="width: 14px; height: 14px;"></i> 업데이트 확인
             </button>
@@ -533,6 +546,32 @@
 
       <div class="modal-footer" style="margin-top: 1rem;">
         <button class="btn btn-primary btn-full" id="btn-close-options-confirm">확인 및 완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dynamic Category Add Modal -->
+  <div id="add-category-modal" class="modal-overlay" style="display: none; z-index: 10000;">
+    <div class="modal-card" style="max-width: 380px; border: 1.5px solid var(--border-medium); box-shadow: 0 25px 70px rgba(0,0,0,0.5);">
+      <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+        <i data-lucide="folder-plus"></i> 새 카테고리 추가
+      </h3>
+      <div style="display: flex; flex-direction: column; gap: 0.9rem;">
+        <div>
+          <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">카테고리 이름</label>
+          <input type="text" id="new-cat-name-input" placeholder="예: 운동, 공부, 프로젝트" style="width: 100%; padding: 0.6rem; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-light); color: var(--text-main); font-size: 0.88rem; outline: none;">
+        </div>
+        <div>
+          <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">대표 색상 선택</label>
+          <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <input type="color" id="new-cat-color-input" value="#a855f7" style="width: 44px; height: 32px; border: 1px solid var(--border-light); border-radius: 6px; cursor: pointer; background: none; padding: 0;">
+            <span id="new-cat-color-label" style="font-family: monospace; font-size: 0.82rem; color: var(--text-main); font-weight: 700;">#A855F7</span>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.4rem;">
+        <button type="button" id="btn-cancel-add-category" class="btn btn-secondary" style="padding: 0.6rem 1rem;">취소</button>
+        <button type="button" id="btn-save-add-category" class="btn btn-primary" style="padding: 0.6rem 1.2rem; font-weight: 700;">추가 완료</button>
       </div>
     </div>
   </div>
@@ -556,7 +595,7 @@
     <div class="modal-card" style="max-width: 420px; text-align: center; border: 1.5px solid var(--border-medium); box-shadow: 0 25px 70px rgba(0,0,0,0.5);">
       <div style="font-size: 2.8rem; margin-bottom: 0.6rem;">✨</div>
       <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.4rem;">최신 버전을 사용 중입니다!</h3>
-      <p id="update-latest-ver-info" style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.2rem;">현재 최신 버전(v1.0.7)을 사용하고 계십니다.</p>
+      <p id="update-latest-ver-info" style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.2rem;">현재 최신 버전(v1.0.8)을 사용하고 계십니다.</p>
       
       <div style="display: flex; justify-content: center; margin-top: 1rem;">
         <button id="btn-close-latest-update-modal" class="btn btn-primary" style="width: 100%; font-weight: 700; padding: 0.75rem;">확인</button>

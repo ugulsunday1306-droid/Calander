@@ -178,18 +178,62 @@ function focusCanvasBoard() {
   state.memoPanX = targetPanX;
   state.memoPanY = targetPanY;
 
-  viewport.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
-  applyMemoTransform();
-
-  setTimeout(() => {
-    viewport.style.transition = '';
-  }, 320);
 
   const zoomBadge = document.getElementById('memo-zoom-badge');
   if (zoomBadge) {
     zoomBadge.textContent = `${Math.round(targetZoom * 100)}%`;
   }
 }
+
+function getCategoryColor(catId) {
+  if (!catId) return '#818cf8';
+  if (catId === 'work') return getComputedStyle(document.documentElement).getPropertyValue('--cat-work').trim() || '#818cf8';
+  if (catId === 'study') return getComputedStyle(document.documentElement).getPropertyValue('--cat-study').trim() || '#34d399';
+  if (catId === 'personal') return getComputedStyle(document.documentElement).getPropertyValue('--cat-personal').trim() || '#f472b6';
+  if (catId === 'health') return getComputedStyle(document.documentElement).getPropertyValue('--cat-health').trim() || '#fbbf24';
+
+  try {
+    const customCats = JSON.parse(localStorage.getItem('ugul_custom_categories') || '[]');
+    const found = customCats.find(c => c.id === catId);
+    if (found && found.color) {
+      return found.color;
+    }
+  } catch (e) {}
+
+  return '#818cf8';
+}
+
+function getCustomCategoryCardStyle(colorHex) {
+  if (!colorHex) colorHex = '#a855f7';
+  try {
+    let hex = colorHex.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) throw new Error('Invalid color');
+
+    const r2 = Math.min(255, Math.round(r * 0.82 + 15));
+    const g2 = Math.min(255, Math.round(g * 0.82 + 15));
+    const b2 = Math.min(255, Math.round(b * 0.82 + 15));
+
+    const color1 = `rgb(${r}, ${g}, ${b})`;
+    const color2 = `rgb(${r2}, ${g2}, ${b2})`;
+
+    return {
+      borderLeftColor: color1,
+      background: `linear-gradient(135deg, ${color1} 0%, ${color2} 100%)`,
+      boxShadow: `0 4px 10px rgba(${r}, ${g}, ${b}, 0.35)`
+    };
+  } catch (e) {
+    return {
+      borderLeftColor: '#a855f7',
+      background: 'linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%)',
+      boxShadow: '0 4px 10px rgba(168, 85, 247, 0.35)'
+    };
+  }
+}
+
 window.focusCanvasBoard = focusCanvasBoard;
 
 // Get Monday of the week for a given date
@@ -636,6 +680,15 @@ function renderEvents() {
         card.className = `event-card ${event.category}`;
         card.setAttribute('draggable', 'true');
         
+        // 커스텀 카테고리인 경우만 동적 그라데이션 주입 (기존 4개 기본 카테고리의 오리지널 그라데이션과 100% 동일 규격)
+        if (event.category && event.category.startsWith('custom_')) {
+          const catColor = getCategoryColor(event.category);
+          const styleObj = getCustomCategoryCardStyle(catColor);
+          card.style.borderLeftColor = styleObj.borderLeftColor;
+          card.style.background = styleObj.background;
+          card.style.boxShadow = styleObj.boxShadow;
+        }
+
         // Less than 3 slots (30 minutes) -> render as compact card
         if (durationSlots < 3) {
           card.classList.add('mini-card');
@@ -1468,7 +1521,8 @@ function saveEventForm(e) {
   const title = document.getElementById('event-title').value.trim();
   const startTime = document.getElementById('event-start-time').value;
   const endTime = document.getElementById('event-end-time').value;
-  const category = document.querySelector('input[name="event-category"]:checked').value;
+  const categoryEl = document.querySelector('input[name="event-category"]:checked');
+  const category = categoryEl ? categoryEl.value : 'work';
   const description = document.getElementById('event-desc').value.trim();
   const alarmVal = document.getElementById('event-alarm').value;
   const alarmMinutesBefore = alarmVal === 'none' ? null : parseInt(alarmVal);
@@ -4774,5 +4828,196 @@ document.addEventListener('DOMContentLoaded', () => {
         if (updateLatestModal) updateLatestModal.style.display = 'none';
       });
     }
+
+    // 동적 카테고리 추가 모달 및 좌측 사이드바 연동
+    const btnOpenAddCat = document.getElementById('btn-open-add-category');
+    const btnSidebarAddCat = document.getElementById('btn-sidebar-add-category');
+    const addCatModal = document.getElementById('add-category-modal');
+    const newCatNameInput = document.getElementById('new-cat-name-input');
+    const newCatColorInput = document.getElementById('new-cat-color-input');
+    const newCatColorLabel = document.getElementById('new-cat-color-label');
+    const btnCancelAddCat = document.getElementById('btn-cancel-add-category');
+    const btnSaveAddCat = document.getElementById('btn-save-add-category');
+    const dynamicCatContainer = document.getElementById('dynamic-category-chips-container');
+    const sidebarDynamicContainer = document.getElementById('sidebar-dynamic-categories');
+
+    if (newCatColorInput && newCatColorLabel) {
+      newCatColorInput.addEventListener('input', (e) => {
+        newCatColorLabel.textContent = e.target.value.toUpperCase();
+      });
+    }
+
+    const openAddModal = () => {
+      if (newCatNameInput) newCatNameInput.value = '';
+      if (newCatColorInput) newCatColorInput.value = '#a855f7';
+      if (newCatColorLabel) newCatColorLabel.textContent = '#A855F7';
+      if (addCatModal) addCatModal.style.display = 'flex';
+      if (newCatNameInput) newCatNameInput.focus();
+    };
+
+    if (btnOpenAddCat) btnOpenAddCat.addEventListener('click', openAddModal);
+    if (btnSidebarAddCat) btnSidebarAddCat.addEventListener('click', openAddModal);
+
+    if (btnCancelAddCat && addCatModal) {
+      btnCancelAddCat.addEventListener('click', () => {
+        addCatModal.style.display = 'none';
+      });
+    }
+
+    function renderDynamicCategories() {
+      const customCats = JSON.parse(localStorage.getItem('ugul_custom_categories') || '[]');
+
+      // 1. 일정 등록/수정 모달 라디오 칩 렌더링
+      if (dynamicCatContainer) {
+        dynamicCatContainer.innerHTML = '';
+        customCats.forEach((cat) => {
+          const label = document.createElement('label');
+          label.className = 'cat-radio-label';
+          label.dataset.customCatId = cat.id;
+          label.title = `우클릭 시 ${cat.name} 색상 변경`;
+          
+          label.innerHTML = `
+            <input type="radio" name="event-category" value="${cat.id}">
+            <span class="custom-radio" style="background-color: ${cat.color}; border-color: ${cat.color}; box-shadow: 0 0 6px ${cat.color};"></span>
+            <span>${escapeHTML(cat.name)}</span>
+          `;
+
+          // 우클릭(contextmenu) 시 색상 피커 오픈
+          label.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const rgbPicker = document.getElementById('cat-rgb-picker');
+            if (rgbPicker) {
+              rgbPicker.value = cat.color || '#a855f7';
+              rgbPicker.oninput = (evt) => {
+                const newColor = evt.target.value;
+                const currentCats = JSON.parse(localStorage.getItem('ugul_custom_categories') || '[]');
+                const target = currentCats.find(c => c.id === cat.id);
+                if (target) {
+                  target.color = newColor;
+                  localStorage.setItem('ugul_custom_categories', JSON.stringify(currentCats));
+                  renderDynamicCategories();
+                  if (typeof renderEvents === 'function') renderEvents();
+                }
+              };
+              rgbPicker.click();
+            }
+          });
+
+          dynamicCatContainer.appendChild(label);
+        });
+      }
+
+      // 2. 캘린더 좌측 사이드바 필터링 체크박스 렌더링 (기존 4개와 100% 동일 규격 + 호버 - 삭제 버튼)
+      if (sidebarDynamicContainer) {
+        sidebarDynamicContainer.innerHTML = '';
+        customCats.forEach((cat) => {
+          const label = document.createElement('label');
+          label.className = 'category-item';
+          label.dataset.customCatId = cat.id;
+          label.title = `우클릭 시 ${cat.name} 색상 변경`;
+
+          label.innerHTML = `
+            <input type="checkbox" checked value="${cat.id}" class="cat-checkbox" data-color="${cat.color}">
+            <span class="dot" style="background-color: ${cat.color}; box-shadow: 0 0 6px ${cat.color};"></span>
+            <span class="cat-name">${escapeHTML(cat.name)}</span>
+            <button type="button" class="btn-delete-category" title="카테고리 삭제">
+              <i data-lucide="minus" style="width: 12px; height: 12px;"></i>
+            </button>
+          `;
+
+          // 호버 - 버튼 클릭 시 카테고리 삭제
+          const btnDelete = label.querySelector('.btn-delete-category');
+          if (btnDelete) {
+            btnDelete.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              if (confirm(`'${cat.name}' 카테고리를 삭제하시겠습니까?`)) {
+                let currentCats = JSON.parse(localStorage.getItem('ugul_custom_categories') || '[]');
+                currentCats = currentCats.filter(c => c.id !== cat.id);
+                localStorage.setItem('ugul_custom_categories', JSON.stringify(currentCats));
+                
+                // 해당 카테고리를 사용하던 일정을 기본 'work' 카테고리로 안전 보정
+                if (state && state.events) {
+                  let updated = false;
+                  state.events.forEach(evt => {
+                    if (evt.category === cat.id) {
+                      evt.category = 'work';
+                      updated = true;
+                    }
+                  });
+                  if (updated && typeof saveEventsToFile === 'function') {
+                    saveEventsToFile();
+                  }
+                }
+
+                renderDynamicCategories();
+                if (typeof renderEvents === 'function') renderEvents();
+              }
+            });
+          }
+
+          // 우클릭(contextmenu) 시 색상 피커 오픈
+          label.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const rgbPicker = document.getElementById('cat-rgb-picker');
+            if (rgbPicker) {
+              rgbPicker.value = cat.color || '#a855f7';
+              rgbPicker.oninput = (evt) => {
+                const newColor = evt.target.value;
+                const currentCats = JSON.parse(localStorage.getItem('ugul_custom_categories') || '[]');
+                const target = currentCats.find(c => c.id === cat.id);
+                if (target) {
+                  target.color = newColor;
+                  localStorage.setItem('ugul_custom_categories', JSON.stringify(currentCats));
+                  renderDynamicCategories();
+                  if (typeof renderEvents === 'function') renderEvents();
+                }
+              };
+              rgbPicker.click();
+            }
+          });
+
+          const checkbox = label.querySelector('input[type="checkbox"]');
+          checkbox.addEventListener('change', () => {
+            if (typeof renderEvents === 'function') {
+              renderEvents();
+            }
+          });
+
+          sidebarDynamicContainer.appendChild(label);
+        });
+        if (window.lucide) lucide.createIcons();
+      }
+    }
+
+    if (btnSaveAddCat) {
+      btnSaveAddCat.addEventListener('click', () => {
+        const catName = newCatNameInput ? newCatNameInput.value.trim() : '';
+        const catColor = newCatColorInput ? newCatColorInput.value : '#a855f7';
+        
+        if (!catName) {
+          alert('카테고리 이름을 입력해주세요!');
+          return;
+        }
+
+        const customCats = JSON.parse(localStorage.getItem('ugul_custom_categories') || '[]');
+        const newCat = {
+          id: 'custom_' + Date.now(),
+          name: catName,
+          color: catColor
+        };
+        customCats.push(newCat);
+        localStorage.setItem('ugul_custom_categories', JSON.stringify(customCats));
+
+        renderDynamicCategories();
+        if (addCatModal) addCatModal.style.display = 'none';
+        if (typeof renderEvents === 'function') {
+          renderEvents();
+        }
+      });
+    }
+
+    renderDynamicCategories();
   }, 100);
 });

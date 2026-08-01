@@ -897,6 +897,7 @@ button, input, select, textarea {
 }
 
 .category-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.65rem;
@@ -905,6 +906,32 @@ button, input, select, textarea {
   padding: 0.4rem;
   border-radius: 6px;
   transition: var(--transition-fast);
+}
+
+.category-item .btn-delete-category {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  cursor: pointer;
+  padding: 0;
+}
+
+.category-item:hover .btn-delete-category {
+  opacity: 1;
+}
+
+.category-item .btn-delete-category:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #ffffff;
 }
 
 .category-item:hover {
@@ -2529,4 +2556,9 @@ body.resizing-active .event-card {
 
 .switch-toggle input:checked + .toggle-slider::before {
   transform: translateX(22px);
+}
+
+/* 동적 카테고리 칩 컨테이너 라벨 찌그러짐 방지 1줄 4개 완벽 그리드 피팅 */
+#dynamic-category-chips-container {
+  display: contents !important;
 }
