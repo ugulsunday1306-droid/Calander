@@ -106,8 +106,10 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 앱 재시작 및 덮어쓰기 배치 스크립트 실행 (사용자 데이터 events.json 및 cache 100% 보존 철통 쉴드)
+// 앱 재시작 및 덮어쓰기 배치 스크립트 실행 (프로세스 완전 강제 종료 & 파일 락 해제 & 사용자 데이터 100% 보존 철통 쉴드)
 function applyUpdateAndRestart(zipPath) {
+  isQuitting = true;
+
   let appDir;
   if (app.isPackaged) {
     appDir = path.dirname(process.execPath);
@@ -118,29 +120,43 @@ function applyUpdateAndRestart(zipPath) {
   const exeName = app.isPackaged ? path.basename(process.execPath) : 'UGULCalander.exe';
   const batPath = path.join(app.getPath('temp'), 'ugul_updater.bat');
   const backupDir = path.join(app.getPath('temp'), 'ugul_user_backup');
+  const extractTempDir = path.join(app.getPath('temp'), 'ugul_extracted_update');
 
   const batContent = `@echo off
 chcp 65001 > nul
+echo UGUL Calander Updating...
+
+rem 1. 실행 중인 모든 UGULCalander 프로세스 완전 강제 종료 (파일 락 해제)
+taskkill /F /IM "${exeName}" /T > nul 2>&1
 timeout /t 2 /nobreak > nul
 
-rem 1. 기존 사용자 데이터(events.json, cache) 백업 디렉토리 준비
+rem 2. 기존 사용자 데이터(events.json 및 cache) 안전 백업
 if exist "${backupDir}" rmdir /s /q "${backupDir}"
 mkdir "${backupDir}"
-
-rem 2. 사용자의 소중한 기존 데이터 임시 안전 이동/백업
 if exist "${appDir}\\events.json" copy /y "${appDir}\\events.json" "${backupDir}\\events.json" > nul
 if exist "${appDir}\\cache" xcopy /s /e /y /i "${appDir}\\cache" "${backupDir}\\cache" > nul
 
-rem 3. 최신 패치 파일 압축 해제 (앱 리소스 덮어쓰기)
-powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${appDir}' -Force"
+rem 3. 임시 추출 디렉토리 준비 및 압축 해제
+if exist "${extractTempDir}" rmdir /s /q "${extractTempDir}"
+mkdir "${extractTempDir}"
+powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${extractTempDir}' -Force"
 
-rem 4. 백업해둔 사용자 데이터 100% 원복 (덮어쓰기 방지 철통 보존!)
+rem 4. 압축 해제된 내용물 덮어쓰기 (UGULCalander-win32-x64 하위 폴더 또는 바로 덮어쓰기)
+if exist "${extractTempDir}\\UGULCalander-win32-x64" (
+    xcopy /s /e /y /i "${extractTempDir}\\UGULCalander-win32-x64\\*" "${appDir}\\" > nul
+) else (
+    xcopy /s /e /y /i "${extractTempDir}\\*" "${appDir}\\" > nul
+)
+
+rem 5. 사용자 데이터 100% 철통 복원
 if exist "${backupDir}\\events.json" copy /y "${backupDir}\\events.json" "${appDir}\\events.json" > nul
 if exist "${backupDir}\\cache" xcopy /s /e /y /i "${backupDir}\\cache" "${appDir}\\cache" > nul
 
-rem 5. 임시 백업 및 패치 파일 정리 후 앱 자동 재실행
+rem 6. 임시 파일 정리 및 최신 앱 자동 재실행
 if exist "${backupDir}" rmdir /s /q "${backupDir}"
-del /f /q "${zipPath}"
+if exist "${extractTempDir}" rmdir /s /q "${extractTempDir}"
+if exist "${zipPath}" del /f /q "${zipPath}"
+
 start "" "${path.join(appDir, exeName)}"
 del /f /q "%~f0"
 `;
@@ -150,10 +166,13 @@ del /f /q "%~f0"
     spawn('cmd.exe', ['/c', batPath], {
       detached: true,
       stdio: 'ignore',
-      windowsHide: true
+      windowsHide: false
     }).unref();
 
-    app.quit();
+    if (mainWindow) {
+      mainWindow.destroy();
+    }
+    app.exit(0);
   } catch (err) {
     console.error('Failed to launch update batch script:', err);
   }
