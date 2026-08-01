@@ -501,6 +501,21 @@
           </div>
         </div>
 
+        <!-- Option 4.5: Auto Launch on Startup -->
+        <div class="options-section">
+          <h4 class="options-section-title">
+            <i data-lucide="power"></i>
+            <span>윈도우 시작 시 자동 실행</span>
+          </h4>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">부팅 시 백그라운드로 자동 실행</span>
+            <label class="switch-toggle" style="position: relative; display: inline-block; width: 44px; height: 22px;">
+              <input type="checkbox" id="toggle-auto-launch" style="opacity: 0; width: 0; height: 0;">
+              <span class="toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.2); transition: .3s; border-radius: 22px; border: 1px solid var(--border-light);"></span>
+            </label>
+          </div>
+        </div>
+
         <!-- Option 5: GitHub Update Check -->
         <div class="options-section">
           <h4 class="options-section-title">
@@ -508,7 +523,7 @@
             <span>버전 정보 및 업데이트</span>
           </h4>
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 0.8rem; color: var(--text-muted);">현재 버전: v1.0.0 (GitHub 배포)</span>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">현재 버전: v1.0.1 (GitHub 배포)</span>
             <button type="button" id="btn-check-update" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 0.4rem;">
               <i data-lucide="github" style="width: 14px; height: 14px;"></i> 업데이트 확인
             </button>

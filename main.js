@@ -513,6 +513,29 @@ if (!gotTheLock) {
       }
     });
 
+    ipcMain.handle('get-auto-launch', () => {
+      try {
+        const settings = app.getLoginItemSettings();
+        return settings.openAtLogin;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    ipcMain.handle('set-auto-launch', (event, enable) => {
+      try {
+        app.setLoginItemSettings({
+          openAtLogin: enable,
+          path: process.execPath,
+          args: []
+        });
+        return true;
+      } catch (e) {
+        console.error('Failed to set login item settings:', e);
+        return false;
+      }
+    });
+
     ipcMain.on('check-for-updates-manual', () => {
       checkForGitHubUpdates(true);
     });

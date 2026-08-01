@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   registerGlobalShortcut: (accelerator) => ipcRenderer.invoke('register-global-shortcut', accelerator),
   send: (channel, data) => ipcRenderer.send(channel, data),
   checkForUpdates: () => ipcRenderer.send('check-for-updates-manual'),
+  getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
+  setAutoLaunch: (enable) => ipcRenderer.invoke('set-auto-launch', enable),
   onRegisterSnooze: (callback) => ipcRenderer.on('register-snooze-from-main', (event, ...args) => callback(...args)),
   writeCustomFile: (filePath, data) => {
     try {
