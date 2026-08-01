@@ -106,7 +106,7 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (PowerShell Bypass 백그라운드 100% 덮어쓰기 & 자동 재실행)
+// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (실시간 대화형 콘솔 디버그 런처 적용)
 function applyUpdateAndRestart(zipPath, extractTempDir) {
   isQuitting = true;
 
@@ -133,33 +133,45 @@ function applyUpdateAndRestart(zipPath, extractTempDir) {
   const psScriptPath = path.join(app.getPath('temp'), 'ugul_updater.ps1');
 
   const psContent = `
-$ErrorActionPreference = 'SilentlyContinue'
+$ErrorActionPreference = 'Continue'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "   UGUL Calander Auto Updater Debug     " -ForegroundColor Yellow
+Write-Host "=========================================" -ForegroundColor Cyan
+
 Start-Sleep -Seconds 2
+Write-Host "[1/4] Terminating existing app..." -ForegroundColor Green
 Get-Process -Name "${exeBaseName}" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
-
-$backupDir = "${path.join(app.getPath('temp'), 'ugul_user_backup').replace(/\\/g, '\\\\')}"
-if (Test-Path $backupDir) { Remove-Item -Path $backupDir -Recurse -Force }
-New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
 
 $appDir = "${appDir.replace(/\\/g, '\\\\')}"
 $sourceDir = "${sourceDir.replace(/\\/g, '\\\\')}"
 $exePath = "${exePath.replace(/\\/g, '\\\\')}"
 
-if (Test-Path "$appDir\\events.json") { Copy-Item "$appDir\\events.json" "$backupDir\\events.json" -Force }
-if (Test-Path "$appDir\\cache") { Copy-Item "$appDir\\cache" "$backupDir\\cache" -Recurse -Force }
+Write-Host "App Dir   : $appDir" -ForegroundColor Gray
+Write-Host "Source Dir: $sourceDir" -ForegroundColor Gray
+Write-Host "Exe Path  : $exePath" -ForegroundColor Gray
 
-Copy-Item -Path "$sourceDir\\*" -Destination "$appDir" -Recurse -Force
+Write-Host "[2/4] Copying updated files..." -ForegroundColor Green
+try {
+    Copy-Item -Path "$sourceDir\\*" -Destination "$appDir" -Recurse -Force -ErrorAction Stop
+    Write-Host "-> Copy Success!" -ForegroundColor Cyan
+} catch {
+    Write-Host "-> Copy Failed: $_" -ForegroundColor Red
+}
 
-if (Test-Path "$backupDir\\events.json") { Copy-Item "$backupDir\\events.json" "$appDir\\events.json" -Force }
-if (Test-Path "$backupDir\\cache") { Copy-Item "$backupDir\\cache" "$appDir\\cache" -Recurse -Force }
+Write-Host "[3/4] Launching new application..." -ForegroundColor Green
+try {
+    Start-Process -FilePath $exePath -WorkingDirectory $appDir -ErrorAction Stop
+    Write-Host "-> Launch Success!" -ForegroundColor Cyan
+} catch {
+    Write-Host "-> Launch Failed: $_" -ForegroundColor Red
+}
 
-if (Test-Path $backupDir) { Remove-Item -Path $backupDir -Recurse -Force }
-if (Test-Path "${safeExtractDir.replace(/\\/g, '\\\\')}") { Remove-Item -Path "${safeExtractDir.replace(/\\/g, '\\\\')}" -Recurse -Force }
-if (Test-Path "${safeZipPath.replace(/\\/g, '\\\\')}") { Remove-Item -Path "${safeZipPath.replace(/\\/g, '\\\\')}" -Force }
-
-Start-Process -FilePath $exePath -WorkingDirectory $appDir
-Remove-Item -Path $MyInvocation.MyCommand.Path -Force
+Write-Host "[4/4] Updater Finished." -ForegroundColor Yellow
+Write-Host "=========================================" -ForegroundColor Cyan
+Write-Host "Press Enter to close this window..." -ForegroundColor White
+Read-Host
 `;
 
   try {
@@ -167,8 +179,7 @@ Remove-Item -Path $MyInvocation.MyCommand.Path -Force
 
     spawn('powershell.exe', [
       '-ExecutionPolicy', 'Bypass',
-      '-NoProfile',
-      '-WindowStyle', 'Hidden',
+      '-NoExit',
       '-File', psScriptPath
     ], {
       detached: true,
