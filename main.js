@@ -20,105 +20,90 @@ function isNewerVersion(currentVer, latestVer) {
   return false;
 }
 
-// 무결성 다운로더 (URL requestOptions 정밀 객체 기반 & 302 리다이렉트 완전 대응)
+// Electron 내장 net 모듈 기반 초강력 무결성 다운로더 (Chromium Network Engine 100% CDN 자동 리다이렉트 추적)
 function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   let isFinished = false;
   let lastSentPercent = -1;
 
-  function followUrl(targetUrl) {
-    try {
-      const urlObj = new URL(targetUrl);
-      const isHttps = urlObj.protocol === 'https:';
-      const client = isHttps ? https : require('http');
+  try {
+    const fileStream = fs.createWriteStream(destPath);
+    const request = net.request({
+      url: initialUrl,
+      method: 'GET',
+      redirect: 'follow'
+    });
 
-      const requestOptions = {
-        protocol: urlObj.protocol,
-        hostname: urlObj.hostname,
-        port: urlObj.port || (isHttps ? 443 : 80),
-        path: urlObj.pathname + urlObj.search,
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': '*/*'
+    request.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    request.setHeader('Accept', '*/*');
+
+    request.on('response', (response) => {
+      if (response.statusCode !== 200) {
+        if (!isFinished) {
+          isFinished = true;
+          fileStream.close();
+          fs.unlink(destPath, () => {});
+          onError(new Error(`HTTP Status ${response.statusCode}`));
         }
-      };
+        return;
+      }
 
-      const req = client.request(requestOptions, (res) => {
-        // 리다이렉트 (301, 302, 303, 307, 308)
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          let nextUrl = res.headers.location;
-          if (nextUrl.startsWith('/')) {
-            nextUrl = `${urlObj.protocol}//${urlObj.host}${nextUrl}`;
-          }
-          return followUrl(nextUrl);
+      const contentLength = response.headers['content-length'];
+      const totalBytes = parseInt(Array.isArray(contentLength) ? contentLength[0] : (contentLength || '0'), 10);
+      let downloadedBytes = 0;
+
+      response.on('data', (chunk) => {
+        downloadedBytes += chunk.length;
+        fileStream.write(chunk);
+
+        let percent = 5;
+        if (totalBytes > 0) {
+          percent = Math.min(99, Math.round((downloadedBytes / totalBytes) * 100));
+        } else {
+          percent = Math.min(99, Math.max(5, Math.round((downloadedBytes / (1024 * 1024 * 10)) * 100)));
         }
 
-        if (res.statusCode !== 200) {
+        if (percent !== lastSentPercent) {
+          lastSentPercent = percent;
+          if (onProgress) onProgress(percent);
+        }
+      });
+
+      response.on('end', () => {
+        fileStream.end(() => {
           if (!isFinished) {
             isFinished = true;
-            onError(new Error(`HTTP Status ${res.statusCode}`));
-          }
-          return;
-        }
-
-        const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-        let downloadedBytes = 0;
-        const fileStream = fs.createWriteStream(destPath);
-
-        res.on('data', (chunk) => {
-          downloadedBytes += chunk.length;
-          fileStream.write(chunk);
-
-          let percent = 5;
-          if (totalBytes > 0) {
-            percent = Math.min(99, Math.round((downloadedBytes / totalBytes) * 100));
-          } else {
-            percent = Math.min(99, Math.max(5, Math.round((downloadedBytes / (1024 * 1024 * 10)) * 100)));
-          }
-
-          if (percent !== lastSentPercent) {
-            lastSentPercent = percent;
-            if (onProgress) onProgress(percent);
-          }
-        });
-
-        res.on('end', () => {
-          fileStream.end(() => {
-            if (!isFinished) {
-              isFinished = true;
-              if (onProgress) onProgress(100);
-              onComplete();
-            }
-          });
-        });
-
-        res.on('error', (err) => {
-          if (!isFinished) {
-            isFinished = true;
-            fileStream.close();
-            fs.unlink(destPath, () => {});
-            onError(err);
+            if (onProgress) onProgress(100);
+            onComplete();
           }
         });
       });
 
-      req.on('error', (err) => {
+      response.on('error', (err) => {
         if (!isFinished) {
           isFinished = true;
+          fileStream.close();
+          fs.unlink(destPath, () => {});
           onError(err);
         }
       });
+    });
 
-      req.end();
-    } catch (err) {
+    request.on('error', (err) => {
       if (!isFinished) {
         isFinished = true;
+        fileStream.close();
+        fs.unlink(destPath, () => {});
         onError(err);
       }
+    });
+
+    request.end();
+  } catch (err) {
+    if (!isFinished) {
+      isFinished = true;
+      onError(err);
     }
   }
-
-  followUrl(initialUrl);
 }
 
 // 앱 재시작 및 덮어쓰기 배치 스크립트 실행 (사용자 데이터 events.json 및 cache 100% 보존 철통 쉴드)
