@@ -106,7 +106,7 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 앱 재시작 및 덮어쓰기 배치 스크립트 실행 (프로세스 완전 강제 종료 & 파일 락 해제 & 사용자 데이터 100% 보존 철통 쉴드)
+// 앱 재시작 및 덮어쓰기 독립 스크립트 실행 (wscript 기반 독립 OS 프로세스 100% 덮어쓰기 & 자동 재실행)
 function applyUpdateAndRestart(zipPath) {
   isQuitting = true;
 
@@ -118,63 +118,77 @@ function applyUpdateAndRestart(zipPath) {
   }
 
   const exeName = app.isPackaged ? path.basename(process.execPath) : 'UGULCalander.exe';
+  const exePath = path.join(appDir, exeName);
   const batPath = path.join(app.getPath('temp'), 'ugul_updater.bat');
+  const vbsPath = path.join(app.getPath('temp'), 'ugul_updater.vbs');
   const backupDir = path.join(app.getPath('temp'), 'ugul_user_backup');
   const extractTempDir = path.join(app.getPath('temp'), 'ugul_extracted_update');
 
   const batContent = `@echo off
 chcp 65001 > nul
-echo UGUL Calander Updating...
+title UGUL Calander Auto Updater
 
-rem 1. 실행 중인 모든 UGULCalander 프로세스 완전 강제 종료 (파일 락 해제)
-taskkill /F /IM "${exeName}" /T > nul 2>&1
+rem 1. 부모 앱 프로세스가 완전히 종료될 때까지 2초 대기
 timeout /t 2 /nobreak > nul
 
-rem 2. 기존 사용자 데이터(events.json 및 cache) 안전 백업
+rem 2. 남아있는 UGULCalander 실행 파일 강제 종료 (독립 안전 종료)
+taskkill /F /IM "${exeName}" > nul 2>&1
+timeout /t 1 /nobreak > nul
+
+rem 3. 사용자 데이터(events.json 및 cache) 안전 백업
 if exist "${backupDir}" rmdir /s /q "${backupDir}"
 mkdir "${backupDir}"
 if exist "${appDir}\\events.json" copy /y "${appDir}\\events.json" "${backupDir}\\events.json" > nul
 if exist "${appDir}\\cache" xcopy /s /e /y /i "${appDir}\\cache" "${backupDir}\\cache" > nul
 
-rem 3. 임시 추출 디렉토리 준비 및 압축 해제
+rem 4. 임시 폴더에 패치 압축 해제
 if exist "${extractTempDir}" rmdir /s /q "${extractTempDir}"
 mkdir "${extractTempDir}"
-powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${extractTempDir}' -Force"
+powershell -Command "Expand-Archive -Path '${zipPath.replace(/'/g, "''")}' -DestinationPath '${extractTempDir.replace(/'/g, "''")}' -Force"
 
-rem 4. 압축 해제된 내용물 덮어쓰기 (UGULCalander-win32-x64 하위 폴더 또는 바로 덮어쓰기)
+rem 5. 리소스 및 최신 파일 덮어쓰기
 if exist "${extractTempDir}\\UGULCalander-win32-x64" (
     xcopy /s /e /y /i "${extractTempDir}\\UGULCalander-win32-x64\\*" "${appDir}\\" > nul
 ) else (
     xcopy /s /e /y /i "${extractTempDir}\\*" "${appDir}\\" > nul
 )
 
-rem 5. 사용자 데이터 100% 철통 복원
+rem 6. 백업해둔 사용자 데이터 100% 복원
 if exist "${backupDir}\\events.json" copy /y "${backupDir}\\events.json" "${appDir}\\events.json" > nul
 if exist "${backupDir}\\cache" xcopy /s /e /y /i "${backupDir}\\cache" "${appDir}\\cache" > nul
 
-rem 6. 임시 파일 정리 및 최신 앱 자동 재실행
+rem 7. 임시 백업/패치 파일 정리
 if exist "${backupDir}" rmdir /s /q "${backupDir}"
 if exist "${extractTempDir}" rmdir /s /q "${extractTempDir}"
 if exist "${zipPath}" del /f /q "${zipPath}"
 
-start "" "${path.join(appDir, exeName)}"
+rem 8. 최신 앱 자동 재실행
+start "" "${exePath}"
+
+rem 9. 임시 스크립트 정리
+del /f /q "${vbsPath}" > nul 2>&1
 del /f /q "%~f0"
+`;
+
+  const vbsContent = `Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "cmd.exe /c """ & "${batPath.replace(/\\/g, '\\\\')}" & """", 0, False
 `;
 
   try {
     fs.writeFileSync(batPath, batContent, 'utf-8');
-    spawn('cmd.exe', ['/c', batPath], {
+    fs.writeFileSync(vbsPath, vbsContent, 'utf-8');
+
+    spawn('wscript.exe', [vbsPath], {
       detached: true,
-      stdio: 'ignore',
-      windowsHide: false
+      stdio: 'ignore'
     }).unref();
 
-    if (mainWindow) {
-      mainWindow.destroy();
-    }
-    app.exit(0);
+    setTimeout(() => {
+      if (mainWindow) mainWindow.destroy();
+      app.exit(0);
+    }, 300);
   } catch (err) {
-    console.error('Failed to launch update batch script:', err);
+    console.error('Failed to launch updater:', err);
   }
 }
 
