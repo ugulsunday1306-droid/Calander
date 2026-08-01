@@ -106,7 +106,7 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 독립 업데이터: update_config.json + .ps1 스크립트 직접 생성 후 실행
+// 독립 업데이터: .ps1 스크립트 직접 생성 후 실행
 function applyUpdateAndRestart(downloadUrl) {
   isQuitting = true;
 
@@ -120,14 +120,24 @@ function applyUpdateAndRestart(downloadUrl) {
 
   const finalUrl = (downloadUrl && downloadUrl.trim()) ? downloadUrl.trim() : (typeof pendingDownloadUrl !== 'undefined' && pendingDownloadUrl ? pendingDownloadUrl : 'https://github.com/ugulsunday1306-droid/Calander/releases/download/v0.0.17/UGULCalander-win32-x64.zip');
 
-  const configPath = path.join(scriptDir, 'update_config.json');
+  const configPath = path.join(scriptDir, 'update_config.json'); // 디버깅 참고용 (스크립트는 이 파일을 읽지 않음)
   const psScriptPath = path.join(scriptDir, 'ugul_updater.ps1');
 
   const configData = {
     downloadUrl: finalUrl,
     appRootDir: appRootDir
   };
-  fs.writeFileSync(configPath, '\ufeff' + JSON.stringify(configData, null, 2), 'utf-8');
+
+  // 사람이 읽기 위한 참고 로그 (실패해도 무시)
+  try {
+    fs.writeFileSync(configPath, '﻿' + JSON.stringify(configData, null, 2), 'utf-8');
+  } catch (e) {}
+
+  // 한글(비-ASCII) 경로가 Node -> 파일 -> PowerShell로 넘어가는 과정에서
+  // 콘솔/시스템 코드페이지 문제로 깨지는 것을 원천 차단하기 위해, 별도 파일을 거치지 않고
+  // Base64(UTF-8)로 인코딩해서 스크립트 본문에 직접 심어 전달한다.
+  const configBase64 = Buffer.from(JSON.stringify(configData), 'utf-8').toString('base64');
+  const exeName = app.isPackaged ? path.basename(process.execPath) : 'UGULCalander.exe';
 
   const psScript = `
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -138,10 +148,13 @@ Write-Host "   UGUL Calander Standalone Updater      " -ForegroundColor Yellow
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
-$configPath = Join-Path $PSScriptRoot "update_config.json"
-$cfg = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+# Base64(UTF-8)로 전달된 설정을 디코딩 (코드페이지로 인한 경로 깨짐 방지)
+$configB64 = "${configBase64}"
+$configJsonText = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($configB64))
+$cfg = $configJsonText | ConvertFrom-Json
 $url = $cfg.downloadUrl
 $appDir = $cfg.appRootDir
+$exeName = "${exeName}"
 $zipPath = Join-Path $env:TEMP "ugul_update.zip"
 $extractDir = Join-Path $env:TEMP "ugul_extracted"
 
@@ -149,62 +162,111 @@ Write-Host "Download URL : $url" -ForegroundColor Gray
 Write-Host "App Directory: $appDir" -ForegroundColor Gray
 Write-Host ""
 
-Write-Host "[1/5] Terminating app..." -ForegroundColor Green
-Start-Sleep -Seconds 2
-Get-Process -Name "UGULCalander" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 1
-Write-Host "-> Done" -ForegroundColor Cyan
-Write-Host ""
+function Fail($msg) {
+    Write-Host ""
+    Write-Host "-> FAILED: $msg" -ForegroundColor Red
+    Write-Host "(Press Enter to close this window)" -ForegroundColor DarkGray
+    Read-Host | Out-Null
+    [Environment]::Exit(1)
+}
 
-Write-Host "[2/5] Downloading patch..." -ForegroundColor Green
 try {
-    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-    $wc = New-Object System.Net.WebClient
-    $wc.Headers.Add("User-Agent", "UGUL-App")
-    $wc.DownloadFile($url, $zipPath)
-    Write-Host "-> Download OK" -ForegroundColor Cyan
+    Write-Host "[1/5] Terminating app..." -ForegroundColor Green
+    $procName = [System.IO.Path]::GetFileNameWithoutExtension($exeName)
+    Get-Process -Name $procName -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    # 프로세스가 완전히 종료될 때까지 최대 10초 대기 (파일 잠금 해제 보장)
+    $waited = 0
+    while ((Get-Process -Name $procName -ErrorAction SilentlyContinue) -and $waited -lt 10) {
+        Start-Sleep -Milliseconds 500
+        $waited += 0.5
+    }
+    Start-Sleep -Milliseconds 500
+    Write-Host "-> Done" -ForegroundColor Cyan
+    Write-Host ""
+
+    Write-Host "[2/5] Downloading patch..." -ForegroundColor Green
+    try {
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "UGUL-App")
+        $wc.DownloadFile($url, $zipPath)
+        Write-Host "-> Download OK" -ForegroundColor Cyan
+    } catch {
+        Fail "Download failed - $_"
+    }
+    Write-Host ""
+
+    Write-Host "[3/5] Extracting zip..." -ForegroundColor Green
+    if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction Stop }
+    try {
+        Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force -ErrorAction Stop
+        Write-Host "-> Extract OK" -ForegroundColor Cyan
+    } catch {
+        Fail "Extract failed - $_"
+    }
+    Write-Host ""
+
+    Write-Host "[4/5] Overwriting files..." -ForegroundColor Green
+    $src = $extractDir
+    $inner = Join-Path $extractDir "UGULCalander-win32-x64"
+    if (Test-Path $inner) { $src = $inner }
+    if (-not (Test-Path $appDir)) {
+        New-Item -ItemType Directory -Path $appDir -Force -ErrorAction Stop | Out-Null
+    }
+    try {
+        Copy-Item -Path (Join-Path $src "*") -Destination $appDir -Recurse -Force -ErrorAction Stop
+        Write-Host "-> Overwrite OK" -ForegroundColor Cyan
+    } catch {
+        Fail "Overwrite failed (file may still be locked) - $_"
+    }
+    Write-Host ""
+
+    Write-Host "[5/5] Restarting app..." -ForegroundColor Green
+    Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    $exe = Join-Path $appDir $exeName
+    if (Test-Path $exe) {
+        try {
+            # cmd.exe의 start를 한 겹 더 거쳐서 새 exe를 완전히 독립된 프로세스/콘솔로 띄운다.
+            # (이렇게 해야 이 업데이터 창을 닫아도 방금 켠 앱이 같이 죽지 않는다.)
+            $cmdArgLine = '/c start "" "' + $exe + '"'
+            Start-Process -FilePath "cmd.exe" -ArgumentList $cmdArgLine -WorkingDirectory $appDir -WindowStyle Hidden -ErrorAction Stop
+            Write-Host "-> Launch OK" -ForegroundColor Cyan
+
+            # 진단용 로그 (문제가 재발하면 이 파일로 원인을 좁힐 수 있다)
+            try {
+                $logPath = Join-Path $env:TEMP "ugul_updater_debug.log"
+                $parentId = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId
+                "[$(Get-Date -Format o)] updater PID=$PID parentPID=$parentId launched=$exe" | Out-File -FilePath $logPath -Append -Encoding UTF8
+            } catch {}
+        } catch {
+            Fail "Launch failed - $_"
+        }
+    } else {
+        Fail "EXE not found at $exe"
+    }
+    Write-Host ""
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Write-Host "   Update Complete!                      " -ForegroundColor Yellow
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Start-Sleep -Seconds 2
 } catch {
-    Write-Host "-> Download FAILED: $_" -ForegroundColor Red
-    Read-Host "Press Enter to exit"
-    exit 1
+    Fail "Unexpected error - $_"
+} finally {
+    Write-Host ""
+    [Environment]::Exit(0)
 }
-Write-Host ""
-
-Write-Host "[3/5] Extracting zip..." -ForegroundColor Green
-if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
-Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
-Write-Host "-> Extract OK" -ForegroundColor Cyan
-Write-Host ""
-
-Write-Host "[4/5] Overwriting files..." -ForegroundColor Green
-$src = $extractDir
-$inner = Join-Path $extractDir "UGULCalander-win32-x64"
-if (Test-Path $inner) { $src = $inner }
-Copy-Item -Path (Join-Path $src "*") -Destination $appDir -Recurse -Force
-Write-Host "-> Overwrite OK" -ForegroundColor Cyan
-Write-Host ""
-
-Write-Host "[5/5] Restarting app..." -ForegroundColor Green
-Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-$exe = Join-Path $appDir "UGULCalander.exe"
-if (Test-Path $exe) {
-    Start-Process -FilePath $exe -WorkingDirectory $appDir
-    Write-Host "-> Launch OK" -ForegroundColor Cyan
-} else {
-    Write-Host "-> EXE not found at $exe" -ForegroundColor Red
-}
-Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "   Update Complete!                      " -ForegroundColor Yellow
-Write-Host "==========================================" -ForegroundColor Cyan
-Start-Sleep -Seconds 3
 `;
 
   fs.writeFileSync(psScriptPath, psScript, 'utf-8');
 
   try {
-    exec(`start "" powershell.exe -ExecutionPolicy Bypass -File "${psScriptPath}"`);
+    // detached+stdio:'ignore' spawn 조합은 Windows에서 콘솔 창 자체가 안 뜨는 경우가 있어
+    // (헤드리스로 백그라운드 실행됨) "업데이터가 실행 안 되는 것처럼 보이는" 증상으로 이어졌다.
+    // 창이 확실히 뜨는 걸로 검증된 기존 방식(cmd의 start)으로 되돌린다.
+    exec(`start "" "${path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')}" -ExecutionPolicy Bypass -NoProfile -File "${psScriptPath}"`, (err) => {
+      if (err) console.error('Failed to launch updater (exec callback):', err);
+    });
 
     setTimeout(() => {
       if (mainWindow) mainWindow.destroy();
@@ -331,6 +393,8 @@ ipcMain.on('start-download-update', () => {
     }
   );
 });
+
+ipcMain.on('open-external-url', (event, url) => {
   if (url) {
     shell.openExternal(url);
   }
@@ -640,6 +704,12 @@ if (!gotTheLock) {
         mainWindow.focus();
         mainWindow.setAlwaysOnTop(true);
         mainWindow.setAlwaysOnTop(false);
+      }
+    });
+
+    ipcMain.on('hide-window', () => {
+      if (mainWindow) {
+        mainWindow.hide();
       }
     });
 
