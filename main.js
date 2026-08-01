@@ -236,6 +236,25 @@ ipcMain.on('start-download-update', () => {
       }
     }
   );
+ipcMain.handle('save-update-zip-and-apply', async (event, arrayBuffer) => {
+  try {
+    const tempZipPath = path.join(app.getPath('temp'), 'ugul_update.zip');
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(tempZipPath, buffer);
+    setTimeout(() => {
+      applyUpdateAndRestart(tempZipPath);
+    }, 1000);
+    return { success: true };
+  } catch (err) {
+    console.error('Failed to save update zip buffer:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.on('open-external-url', (event, url) => {
+  if (url) {
+    shell.openExternal(url);
+  }
 });
 
 let mainWindow = null;

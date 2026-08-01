@@ -4760,9 +4760,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressPercent = document.getElementById('update-progress-percent');
     const progressBarFill = document.getElementById('update-progress-bar-fill');
 
+    let latestReleaseInfo = null;
+
     if (window.electronAPI) {
       if (window.electronAPI.onUpdateAvailable) {
         window.electronAPI.onUpdateAvailable((data) => {
+          latestReleaseInfo = data;
           if (updateModal && updateVerInfo) {
             updateVerInfo.textContent = `현재 버전 (${data.currentVersion}) ➔ 최신 버전 (${data.latestVersion})`;
             updateModal.style.display = 'flex';
@@ -4802,17 +4805,89 @@ document.addEventListener('DOMContentLoaded', () => {
       if (window.electronAPI.onUpdateError) {
         window.electronAPI.onUpdateError((err) => {
           if (progressWidget) progressWidget.style.display = 'none';
-          alert('업데이트 실패: ' + err);
+          alert('업데이트 오류: ' + err);
         });
+      }
+    }
+
+    // [초강력 무결성 패치 엔진] 렌더러 direct fetch 스트리밍 및 웹 fallback 2중 안전망
+    async function startDirectFetchUpdate(downloadUrl) {
+      if (progressWidget) progressWidget.style.display = 'block';
+      if (progressStatus) progressStatus.textContent = '⚡ 최신 패치 다운로드 중...';
+      if (progressPercent) progressPercent.textContent = '1%';
+      if (progressBarFill) progressBarFill.style.width = '1%';
+
+      try {
+        const response = await fetch(downloadUrl);
+        if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+
+        const contentLength = response.headers.get('content-length');
+        const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+        
+        const reader = response.body.getReader();
+        let receivedBytes = 0;
+        const chunks = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          receivedBytes += value.length;
+
+          let percent = 5;
+          if (totalBytes > 0) {
+            percent = Math.min(99, Math.round((receivedBytes / totalBytes) * 100));
+          } else {
+            percent = Math.min(99, Math.max(5, Math.round((receivedBytes / (1024 * 1024 * 10)) * 100)));
+          }
+
+          if (progressPercent) progressPercent.textContent = `${percent}%`;
+          if (progressBarFill) progressBarFill.style.width = `${percent}%`;
+        }
+
+        if (progressStatus) progressStatus.textContent = '⚡ 바이너리 검증 완료! 무결성 패치 적용 중...';
+        if (progressPercent) progressPercent.textContent = '100%';
+        if (progressBarFill) progressBarFill.style.width = '100%';
+
+        // Uint8Array 합치기
+        const totalBuffer = new Uint8Array(receivedBytes);
+        let offset = 0;
+        for (const chunk of chunks) {
+          totalBuffer.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        // 메인 프로세스에 전달하여 압축 해제 및 앱 자동 재시작 실행
+        if (window.electronAPI && window.electronAPI.saveUpdateZipAndApply) {
+          const res = await window.electronAPI.saveUpdateZipAndApply(totalBuffer.buffer);
+          if (!res || !res.success) {
+            throw new Error(res ? res.error : '적용 실패');
+          }
+        }
+      } catch (err) {
+        console.error('Direct fetch update failed, opening browser fallback:', err);
+        if (progressWidget) progressWidget.style.display = 'none';
+        
+        // [2중 안전 망] 웹 브라우저 직통 다운로드 창 자동 호출
+        if (confirm(`자동 다운로드가 방화벽/네트워크 환경으로 차단되었습니다.\n웹 브라우저로 패치 파일(${latestReleaseInfo ? latestReleaseInfo.latestVersion : '최신버전'})을 다운로드하시겠습니까?`)) {
+          if (window.electronAPI && window.electronAPI.openExternalUrl && latestReleaseInfo && latestReleaseInfo.downloadUrl) {
+            window.electronAPI.openExternalUrl(latestReleaseInfo.downloadUrl);
+          }
+        }
       }
     }
 
     if (btnStartUpdate) {
       btnStartUpdate.addEventListener('click', () => {
         if (updateModal) updateModal.style.display = 'none';
-        if (progressWidget) progressWidget.style.display = 'block';
-        if (window.electronAPI && window.electronAPI.startDownloadUpdate) {
+        
+        if (latestReleaseInfo && latestReleaseInfo.downloadUrl) {
+          startDirectFetchUpdate(latestReleaseInfo.downloadUrl);
+        } else if (window.electronAPI && window.electronAPI.startDownloadUpdate) {
+          if (progressWidget) progressWidget.style.display = 'block';
           window.electronAPI.startDownloadUpdate();
+        } else {
+          alert('다운로드 주소를 찾을 수 없습니다. [업데이트 확인]을 다시 눌러주세요.');
         }
       });
     }

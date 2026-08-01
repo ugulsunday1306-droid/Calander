@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startDownloadUpdate: () => ipcRenderer.send('start-download-update'),
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch: (enable) => ipcRenderer.invoke('set-auto-launch', enable),
+  saveUpdateZipAndApply: (arrayBuffer) => ipcRenderer.invoke('save-update-zip-and-apply', arrayBuffer),
+  openExternalUrl: (url) => ipcRenderer.send('open-external-url', url),
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (e, data) => callback(data)),
   onUpdateNotAvailable: (callback) => ipcRenderer.on('update-not-available', (e, msg) => callback(msg)),
   onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (e, percent) => callback(percent)),
