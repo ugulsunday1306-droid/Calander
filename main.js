@@ -20,38 +20,42 @@ function isNewerVersion(currentVer, latestVer) {
   return false;
 }
 
-// 초강력 무결성 다운로더 (HTTP/HTTPS 자동 전환 & CDN 302 리다이렉트 100% 추적 & IPC 폭주 방지 퍼센트 보장)
+// 무결성 다운로더 (URL requestOptions 정밀 객체 기반 & 302 리다이렉트 완전 대응)
 function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
-  const fileStream = fs.createWriteStream(destPath);
   let isFinished = false;
   let lastSentPercent = -1;
 
-  const fetchUrl = (currentUrl) => {
+  function followUrl(targetUrl) {
     try {
-      const isHttps = currentUrl.startsWith('https:');
+      const urlObj = new URL(targetUrl);
+      const isHttps = urlObj.protocol === 'https:';
       const client = isHttps ? https : require('http');
 
-      const req = client.get(currentUrl, {
+      const requestOptions = {
+        protocol: urlObj.protocol,
+        hostname: urlObj.hostname,
+        port: urlObj.port || (isHttps ? 443 : 80),
+        path: urlObj.pathname + urlObj.search,
+        method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': '*/*'
         }
-      }, (res) => {
-        // 301, 302, 303, 307, 308 리다이렉트 완전 처리
+      };
+
+      const req = client.request(requestOptions, (res) => {
+        // 리다이렉트 (301, 302, 303, 307, 308)
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          let redirectUrl = res.headers.location;
-          if (redirectUrl.startsWith('/')) {
-            const u = new URL(currentUrl);
-            redirectUrl = `${u.protocol}//${u.host}${redirectUrl}`;
+          let nextUrl = res.headers.location;
+          if (nextUrl.startsWith('/')) {
+            nextUrl = `${urlObj.protocol}//${urlObj.host}${nextUrl}`;
           }
-          return fetchUrl(redirectUrl);
+          return followUrl(nextUrl);
         }
 
         if (res.statusCode !== 200) {
           if (!isFinished) {
             isFinished = true;
-            fileStream.close();
-            fs.unlink(destPath, () => {});
             onError(new Error(`HTTP Status ${res.statusCode}`));
           }
           return;
@@ -59,24 +63,22 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
 
         const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
         let downloadedBytes = 0;
+        const fileStream = fs.createWriteStream(destPath);
 
         res.on('data', (chunk) => {
           downloadedBytes += chunk.length;
           fileStream.write(chunk);
 
-          if (onProgress) {
-            let percent = 5;
-            if (totalBytes > 0) {
-              percent = Math.min(99, Math.round((downloadedBytes / totalBytes) * 100));
-            } else {
-              percent = Math.min(99, Math.max(5, Math.round((downloadedBytes / (1024 * 1024 * 10)) * 100)));
-            }
+          let percent = 5;
+          if (totalBytes > 0) {
+            percent = Math.min(99, Math.round((downloadedBytes / totalBytes) * 100));
+          } else {
+            percent = Math.min(99, Math.max(5, Math.round((downloadedBytes / (1024 * 1024 * 10)) * 100)));
+          }
 
-            // [핵심 해결책] IPC 이벤트 초당 수백번 폭주 방지: 정수 퍼센트가 바뀔 때만 렌더러로 전송!
-            if (percent !== lastSentPercent) {
-              lastSentPercent = percent;
-              onProgress(percent);
-            }
+          if (percent !== lastSentPercent) {
+            lastSentPercent = percent;
+            if (onProgress) onProgress(percent);
           }
         });
 
@@ -103,22 +105,20 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
       req.on('error', (err) => {
         if (!isFinished) {
           isFinished = true;
-          fileStream.close();
-          fs.unlink(destPath, () => {});
           onError(err);
         }
       });
+
+      req.end();
     } catch (err) {
       if (!isFinished) {
         isFinished = true;
-        fileStream.close();
-        fs.unlink(destPath, () => {});
         onError(err);
       }
     }
-  };
+  }
 
-  fetchUrl(initialUrl);
+  followUrl(initialUrl);
 }
 
 // 앱 재시작 및 덮어쓰기 배치 스크립트 실행 (사용자 데이터 events.json 및 cache 100% 보존 철통 쉴드)
