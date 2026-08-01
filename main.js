@@ -340,6 +340,25 @@ if (!gotTheLock) {
       }
     }
 
+    function healCachePaths(payload) {
+      if (!payload || !Array.isArray(payload.memoItems)) return payload;
+      payload.memoItems.forEach(item => {
+        if (item.type === 'image' && item.content) {
+          try {
+            const cleanP = item.content.replace(/^file:\/\/\/?/, '');
+            const basename = path.basename(cleanP);
+            const currentLocalPath = path.join(cacheDir, basename);
+            
+            // 만약 현재 실행 위치의 cacheDir에 해당 파일이 존재한다면 현재 실경로로 자동 교정!
+            if (fs.existsSync(currentLocalPath)) {
+              item.content = currentLocalPath;
+            }
+          } catch (e) {}
+        }
+      });
+      return payload;
+    }
+
     ipcMain.on('save-memo-image', (event, base64Data) => {
       try {
         ensureCacheDir();
@@ -392,7 +411,9 @@ if (!gotTheLock) {
           if (data && data.charCodeAt(0) === 0xFEFF) {
             data = data.slice(1);
           }
-          event.returnValue = JSON.parse(data);
+          let parsed = JSON.parse(data);
+          parsed = healCachePaths(parsed);
+          event.returnValue = parsed;
           return;
         }
       } catch (e) {

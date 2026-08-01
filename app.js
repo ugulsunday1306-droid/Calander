@@ -4660,7 +4660,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (window.electronAPI && window.electronAPI.send) {
           window.electronAPI.send('check-for-updates-manual');
         } else {
-          alert('현재 버전: v1.0.3 (GitHub Repository: ugulsunday1306-droid/Calander)');
+          alert('현재 버전: v1.0.4 (GitHub Repository: ugulsunday1306-droid/Calander)');
         }
       });
     }
