@@ -122,8 +122,11 @@ function applyUpdateAndRestart(zipPath, extractTempDir) {
   const batPath = path.join(app.getPath('temp'), 'ugul_updater.bat');
   const backupDir = path.join(app.getPath('temp'), 'ugul_user_backup');
 
-  let sourceDir = extractTempDir;
-  const innerSubDir = path.join(extractTempDir, 'UGULCalander-win32-x64');
+  const safeZipPath = zipPath || path.join(app.getPath('temp'), 'ugul_update.zip');
+  const safeExtractDir = extractTempDir || path.join(app.getPath('temp'), 'ugul_extracted_update');
+
+  let sourceDir = safeExtractDir;
+  const innerSubDir = path.join(safeExtractDir, 'UGULCalander-win32-x64');
   if (fs.existsSync(innerSubDir)) {
     sourceDir = innerSubDir;
   }
@@ -152,8 +155,8 @@ if exist "${backupDir}\\cache" xcopy /s /e /y /i "${backupDir}\\cache" "${appDir
 
 rem 5. 임시 백업/패치 파일 정리
 if exist "${backupDir}" rmdir /s /q "${backupDir}"
-if exist "${extractTempDir}" rmdir /s /q "${extractTempDir}"
-if exist "${zipPath}" del /f /q "${zipPath}"
+if exist "${safeExtractDir}" rmdir /s /q "${safeExtractDir}"
+if exist "${safeZipPath}" del /f /q "${safeZipPath}"
 
 rem 6. 최신 앱 자동 재실행
 start "" "${exePath}"
@@ -171,11 +174,45 @@ del /f /q "%~f0"
     setTimeout(() => {
       if (mainWindow) mainWindow.destroy();
       app.exit(0);
-    }, 300);
+    }, 400);
   } catch (err) {
     console.error('Failed to launch updater:', err);
   }
 }
+
+ipcMain.handle('save-update-zip-and-apply', async (event, arrayBuffer) => {
+  try {
+    const tempZipPath = path.join(app.getPath('temp'), 'ugul_update.zip');
+    const extractTempDir = path.join(app.getPath('temp'), 'ugul_extracted_update');
+    const buffer = Buffer.from(arrayBuffer);
+
+    // 1. 패치 ZIP 파일 저장
+    fs.writeFileSync(tempZipPath, buffer);
+
+    // 2. 메인 프로세스가 살아있는 동안 미리 임시 폴더에 압축 해제 사전 완공
+    if (fs.existsSync(extractTempDir)) {
+      fs.rmSync(extractTempDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(extractTempDir, { recursive: true });
+
+    try {
+      execSync(`tar -xf "${tempZipPath}" -C "${extractTempDir}"`);
+    } catch (e1) {
+      try {
+        execSync(`powershell -Command "Expand-Archive -Path '${tempZipPath}' -DestinationPath '${extractTempDir}' -Force"`);
+      } catch (e2) {}
+    }
+
+    // 3. 압축 해제 확인 후 덮어쓰기 및 자동 재실행 런처 호출
+    setTimeout(() => {
+      applyUpdateAndRestart(tempZipPath, extractTempDir);
+    }, 500);
+    return { success: true };
+  } catch (err) {
+    console.error('Failed to save update zip buffer or extract:', err);
+    return { success: false, error: err.message };
+  }
+});
 
 let pendingDownloadUrl = null;
 
@@ -231,6 +268,7 @@ function checkForGitHubUpdates(isManualCheck = false) {
 ipcMain.on('start-download-update', () => {
   if (!pendingDownloadUrl) return;
   const tempZipPath = path.join(app.getPath('temp'), 'ugul_update.zip');
+  const extractTempDir = path.join(app.getPath('temp'), 'ugul_extracted_update');
 
   downloadFile(
     pendingDownloadUrl,
@@ -244,8 +282,22 @@ ipcMain.on('start-download-update', () => {
       if (mainWindow) {
         mainWindow.webContents.send('update-downloaded');
       }
+
+      if (fs.existsSync(extractTempDir)) {
+        fs.rmSync(extractTempDir, { recursive: true, force: true });
+      }
+      fs.mkdirSync(extractTempDir, { recursive: true });
+
+      try {
+        execSync(`tar -xf "${tempZipPath}" -C "${extractTempDir}"`);
+      } catch (e1) {
+        try {
+          execSync(`powershell -Command "Expand-Archive -Path '${tempZipPath}' -DestinationPath '${extractTempDir}' -Force"`);
+        } catch (e2) {}
+      }
+
       setTimeout(() => {
-        applyUpdateAndRestart(tempZipPath);
+        applyUpdateAndRestart(tempZipPath, extractTempDir);
       }, 1200);
     },
     (err) => {
@@ -254,22 +306,7 @@ ipcMain.on('start-download-update', () => {
       }
     }
   );
-ipcMain.handle('save-update-zip-and-apply', async (event, arrayBuffer) => {
-  try {
-    const tempZipPath = path.join(app.getPath('temp'), 'ugul_update.zip');
-    const buffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(tempZipPath, buffer);
-    setTimeout(() => {
-      applyUpdateAndRestart(tempZipPath);
-    }, 1000);
-    return { success: true };
-  } catch (err) {
-    console.error('Failed to save update zip buffer:', err);
-    return { success: false, error: err.message };
-  }
 });
-
-ipcMain.on('open-external-url', (event, url) => {
   if (url) {
     shell.openExternal(url);
   }
