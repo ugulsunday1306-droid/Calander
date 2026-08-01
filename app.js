@@ -4682,5 +4682,71 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
+
+    // 커스텀 인앱 업데이트 모달 & 하단 프로그래스 바 제어
+    const updateModal = document.getElementById('update-custom-modal');
+    const updateVerInfo = document.getElementById('update-modal-ver-info');
+    const btnStartUpdate = document.getElementById('btn-start-inapp-update');
+    const btnDismissUpdate = document.getElementById('btn-dismiss-inapp-update');
+    const progressWidget = document.getElementById('update-progress-widget');
+    const progressStatus = document.getElementById('update-progress-status');
+    const progressPercent = document.getElementById('update-progress-percent');
+    const progressBarFill = document.getElementById('update-progress-bar-fill');
+
+    if (window.electronAPI) {
+      if (window.electronAPI.onUpdateAvailable) {
+        window.electronAPI.onUpdateAvailable((data) => {
+          if (updateModal && updateVerInfo) {
+            updateVerInfo.textContent = `현재 버전 (${data.currentVersion}) ➔ 최신 버전 (${data.latestVersion})`;
+            updateModal.style.display = 'flex';
+          }
+        });
+      }
+
+      if (window.electronAPI.onUpdateNotAvailable) {
+        window.electronAPI.onUpdateNotAvailable((msg) => {
+          alert(msg);
+        });
+      }
+
+      if (window.electronAPI.onUpdateProgress) {
+        window.electronAPI.onUpdateProgress((percent) => {
+          if (progressWidget) progressWidget.style.display = 'block';
+          if (progressPercent) progressPercent.textContent = `${percent}%`;
+          if (progressBarFill) progressBarFill.style.width = `${percent}%`;
+        });
+      }
+
+      if (window.electronAPI.onUpdateDownloaded) {
+        window.electronAPI.onUpdateDownloaded(() => {
+          if (progressStatus) progressStatus.textContent = '✅ 패치 완료! 앱을 자동 재시작합니다...';
+          if (progressBarFill) progressBarFill.style.width = '100%';
+          if (progressPercent) progressPercent.textContent = '100%';
+        });
+      }
+
+      if (window.electronAPI.onUpdateError) {
+        window.electronAPI.onUpdateError((err) => {
+          if (progressWidget) progressWidget.style.display = 'none';
+          alert('업데이트 실패: ' + err);
+        });
+      }
+    }
+
+    if (btnStartUpdate) {
+      btnStartUpdate.addEventListener('click', () => {
+        if (updateModal) updateModal.style.display = 'none';
+        if (progressWidget) progressWidget.style.display = 'block';
+        if (window.electronAPI && window.electronAPI.startDownloadUpdate) {
+          window.electronAPI.startDownloadUpdate();
+        }
+      });
+    }
+
+    if (btnDismissUpdate) {
+      btnDismissUpdate.addEventListener('click', () => {
+        if (updateModal) updateModal.style.display = 'none';
+      });
+    }
   }, 100);
 });

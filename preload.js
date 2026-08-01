@@ -16,8 +16,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   registerGlobalShortcut: (accelerator) => ipcRenderer.invoke('register-global-shortcut', accelerator),
   send: (channel, data) => ipcRenderer.send(channel, data),
   checkForUpdates: () => ipcRenderer.send('check-for-updates-manual'),
+  startDownloadUpdate: () => ipcRenderer.send('start-download-update'),
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch: (enable) => ipcRenderer.invoke('set-auto-launch', enable),
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (e, data) => callback(data)),
+  onUpdateNotAvailable: (callback) => ipcRenderer.on('update-not-available', (e, msg) => callback(msg)),
+  onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (e, percent) => callback(percent)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', () => callback()),
+  onUpdateError: (callback) => ipcRenderer.on('update-error', (e, err) => callback(err)),
   onRegisterSnooze: (callback) => ipcRenderer.on('register-snooze-from-main', (event, ...args) => callback(...args)),
   writeCustomFile: (filePath, data) => {
     try {
