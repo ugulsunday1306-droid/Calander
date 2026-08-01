@@ -5076,8 +5076,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const catColor = newCatColorInput ? newCatColorInput.value : '#a855f7';
         
         if (!catName) {
-          alert('카테고리 이름을 입력해주세요!');
+          if (newCatNameInput) {
+            newCatNameInput.style.border = '2px solid #ef4444';
+            newCatNameInput.placeholder = '카테고리 이름을 입력해주세요!';
+            setTimeout(() => {
+              newCatNameInput.focus();
+            }, 50);
+          }
           return;
+        }
+
+        if (newCatNameInput) {
+          newCatNameInput.style.border = '1px solid var(--border-light)';
         }
 
         const customCats = JSON.parse(localStorage.getItem('ugul_custom_categories') || '[]');

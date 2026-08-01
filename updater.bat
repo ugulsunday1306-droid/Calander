@@ -1,73 +1,49 @@
 @echo off
-chcp 65001 > nul
-title UGUL Calander Standalone Updater
-
+title UGUL Calander Updater
 echo ===================================================
-echo     UGUL Calander Standalone Helper Updater
+echo     UGUL Calander Standalone Updater
 echo ===================================================
-echo.
-
-set DOWNLOAD_URL=%~1
-set APP_DIR=%~dp0
-set EXE_PATH=%APP_DIR%UGULCalander.exe
-set TEMP_ZIP=%TEMP%\ugul_standalone_update.zip
-set EXTRACT_DIR=%TEMP%\ugul_standalone_extracted
-
-echo [1/5] Waiting for UGULCalander.exe to terminate...
-timeout /t 2 /nobreak > nul
-taskkill /F /IM UGULCalander.exe > nul 2>&1
-timeout /t 1 /nobreak > nul
-echo -> App terminated safely.
-echo.
-
-echo [2/5] Downloading latest update patch...
-echo -> URL: %DOWNLOAD_URL%
-powershell -Command "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('%DOWNLOAD_URL%', '%TEMP_ZIP%')"
-if not exist "%TEMP_ZIP%" (
-    echo [ERROR] Download Failed! Please check your network connection.
-    goto END
-)
-echo -> Patch downloaded successfully.
-echo.
-
-echo [3/5] Unzipping patch package...
-if exist "%EXTRACT_DIR%" rmdir /s /q "%EXTRACT_DIR%"
-mkdir "%EXTRACT_DIR%"
-powershell -Command "Expand-Archive -LiteralPath '%TEMP_ZIP%' -DestinationPath '%EXTRACT_DIR%' -Force"
-echo -> Unzip completed.
-echo.
-
-echo [4/5] Overwriting application files...
-set SOURCE_DIR=%EXTRACT_DIR%
-if exist "%EXTRACT_DIR%\UGULCalander-win32-x64" (
-    set SOURCE_DIR=%EXTRACT_DIR%\UGULCalander-win32-x64
-)
-
-xcopy /s /e /y /i "%SOURCE_DIR%\*" "%APP_DIR%" > nul
-echo -> File overwrite completed!
-echo.
-
-echo [5/5] Cleaning temp files and restarting app...
-if exist "%EXTRACT_DIR%" rmdir /s /q "%EXTRACT_DIR%"
-if exist "%TEMP_ZIP%" del /f /q "%TEMP_ZIP%"
-
-if exist "%EXE_PATH%" (
-    echo -> Launching: %EXE_PATH%
-    start "" /D "%APP_DIR%" "%EXE_PATH%"
-) else (
-    echo -> Launching main app...
-    start "" /D "%APP_DIR%" "UGULCalander.exe"
-)
-
-echo.
-echo ===================================================
-echo     Update Complete! Restarting application...
-echo ===================================================
-timeout /t 2 /nobreak > nul
-exit
-
-:END
-echo.
-echo Press any key to exit updater...
-pause > nul
-exit
+powershell -ExecutionPolicy Bypass -Command ^
+  "$configPath = Join-Path '%~dp0' 'update_config.json'; " ^
+  "if (-not (Test-Path $configPath)) { Write-Host '[ERROR] Config not found'; Read-Host; exit 1 }; " ^
+  "$cfg = Get-Content $configPath -Raw | ConvertFrom-Json; " ^
+  "$url = $cfg.downloadUrl; " ^
+  "$appDir = $cfg.appRootDir; " ^
+  "$zipPath = Join-Path $env:TEMP 'ugul_update.zip'; " ^
+  "$extractDir = Join-Path $env:TEMP 'ugul_extracted'; " ^
+  "Write-Host ''; " ^
+  "Write-Host '[1/5] Terminating app...' -ForegroundColor Green; " ^
+  "Start-Sleep -Seconds 2; " ^
+  "Get-Process -Name UGULCalander -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; " ^
+  "Start-Sleep -Seconds 1; " ^
+  "Write-Host '-> Done' -ForegroundColor Cyan; " ^
+  "Write-Host ''; " ^
+  "Write-Host '[2/5] Downloading patch...' -ForegroundColor Green; " ^
+  "Write-Host \"URL: $url\"; " ^
+  "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; " ^
+  "$wc = New-Object System.Net.WebClient; " ^
+  "$wc.Headers.Add('User-Agent', 'UGUL-App'); " ^
+  "try { $wc.DownloadFile($url, $zipPath); Write-Host '-> Download OK' -ForegroundColor Cyan } catch { Write-Host \"-> FAIL: $_\" -ForegroundColor Red; Read-Host; exit 1 }; " ^
+  "Write-Host ''; " ^
+  "Write-Host '[3/5] Extracting zip...' -ForegroundColor Green; " ^
+  "if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }; " ^
+  "Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force; " ^
+  "Write-Host '-> Extract OK' -ForegroundColor Cyan; " ^
+  "Write-Host ''; " ^
+  "Write-Host '[4/5] Overwriting files...' -ForegroundColor Green; " ^
+  "$src = $extractDir; " ^
+  "$inner = Join-Path $extractDir 'UGULCalander-win32-x64'; " ^
+  "if (Test-Path $inner) { $src = $inner }; " ^
+  "Copy-Item -Path \"$src\*\" -Destination $appDir -Recurse -Force; " ^
+  "Write-Host \"-> Overwrite OK into $appDir\" -ForegroundColor Cyan; " ^
+  "Write-Host ''; " ^
+  "Write-Host '[5/5] Restarting app...' -ForegroundColor Green; " ^
+  "Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue; " ^
+  "Remove-Item $zipPath -Force -ErrorAction SilentlyContinue; " ^
+  "Remove-Item $configPath -Force -ErrorAction SilentlyContinue; " ^
+  "$exe = Join-Path $appDir 'UGULCalander.exe'; " ^
+  "if (Test-Path $exe) { Start-Process -FilePath $exe -WorkingDirectory $appDir; Write-Host '-> Launch OK' -ForegroundColor Cyan } " ^
+  "else { Write-Host '-> EXE not found' -ForegroundColor Red }; " ^
+  "Write-Host ''; " ^
+  "Write-Host '=== Update Complete ===' -ForegroundColor Yellow; " ^
+  "Start-Sleep -Seconds 2"

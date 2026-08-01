@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, globalShortcut, shell, 
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, exec } = require('child_process');
 
 const GITHUB_OWNER = 'ugulsunday1306-droid';
 const GITHUB_REPO = 'Calander';
@@ -106,37 +106,112 @@ function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   }
 }
 
-// 독립 헬퍼 업데이터 스크립트(updater.bat) 호출 후 메인 앱 0.3초 내 즉시 종료
+// 독립 업데이터: update_config.json + .ps1 스크립트 직접 생성 후 실행
 function applyUpdateAndRestart(downloadUrl) {
   isQuitting = true;
 
-  let appDir;
-  if (app.isPackaged) {
-    appDir = path.dirname(process.execPath);
-  } else {
-    appDir = __dirname;
+  const appRootDir = app.isPackaged ? path.dirname(process.execPath) : __dirname;
+  const scriptDir = path.join(app.getPath('temp'), 'ugul_updater');
+
+  // 폴더 생성
+  if (!fs.existsSync(scriptDir)) {
+    fs.mkdirSync(scriptDir, { recursive: true });
   }
 
-  let updaterBatPath = path.join(__dirname, 'updater.bat');
-  if (!fs.existsSync(updaterBatPath)) {
-    updaterBatPath = path.join(appDir, 'resources', 'app', 'updater.bat');
-  }
-  if (!fs.existsSync(updaterBatPath)) {
-    updaterBatPath = path.join(appDir, 'updater.bat');
-  }
+  const finalUrl = (downloadUrl && downloadUrl.trim()) ? downloadUrl.trim() : (typeof pendingDownloadUrl !== 'undefined' && pendingDownloadUrl ? pendingDownloadUrl : 'https://github.com/ugulsunday1306-droid/Calander/releases/download/v0.0.17/UGULCalander-win32-x64.zip');
+
+  const configPath = path.join(scriptDir, 'update_config.json');
+  const psScriptPath = path.join(scriptDir, 'ugul_updater.ps1');
+
+  const configData = {
+    downloadUrl: finalUrl,
+    appRootDir: appRootDir
+  };
+  fs.writeFileSync(configPath, '\ufeff' + JSON.stringify(configData, null, 2), 'utf-8');
+
+  const psScript = `
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$Host.UI.RawUI.WindowTitle = "UGUL Calander Updater"
+
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "   UGUL Calander Standalone Updater      " -ForegroundColor Yellow
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host ""
+
+$configPath = Join-Path $PSScriptRoot "update_config.json"
+$cfg = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$url = $cfg.downloadUrl
+$appDir = $cfg.appRootDir
+$zipPath = Join-Path $env:TEMP "ugul_update.zip"
+$extractDir = Join-Path $env:TEMP "ugul_extracted"
+
+Write-Host "Download URL : $url" -ForegroundColor Gray
+Write-Host "App Directory: $appDir" -ForegroundColor Gray
+Write-Host ""
+
+Write-Host "[1/5] Terminating app..." -ForegroundColor Green
+Start-Sleep -Seconds 2
+Get-Process -Name "UGULCalander" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+Write-Host "-> Done" -ForegroundColor Cyan
+Write-Host ""
+
+Write-Host "[2/5] Downloading patch..." -ForegroundColor Green
+try {
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+    $wc = New-Object System.Net.WebClient
+    $wc.Headers.Add("User-Agent", "UGUL-App")
+    $wc.DownloadFile($url, $zipPath)
+    Write-Host "-> Download OK" -ForegroundColor Cyan
+} catch {
+    Write-Host "-> Download FAILED: $_" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+Write-Host ""
+
+Write-Host "[3/5] Extracting zip..." -ForegroundColor Green
+if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
+Write-Host "-> Extract OK" -ForegroundColor Cyan
+Write-Host ""
+
+Write-Host "[4/5] Overwriting files..." -ForegroundColor Green
+$src = $extractDir
+$inner = Join-Path $extractDir "UGULCalander-win32-x64"
+if (Test-Path $inner) { $src = $inner }
+Copy-Item -Path (Join-Path $src "*") -Destination $appDir -Recurse -Force
+Write-Host "-> Overwrite OK" -ForegroundColor Cyan
+Write-Host ""
+
+Write-Host "[5/5] Restarting app..." -ForegroundColor Green
+Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+$exe = Join-Path $appDir "UGULCalander.exe"
+if (Test-Path $exe) {
+    Start-Process -FilePath $exe -WorkingDirectory $appDir
+    Write-Host "-> Launch OK" -ForegroundColor Cyan
+} else {
+    Write-Host "-> EXE not found at $exe" -ForegroundColor Red
+}
+Write-Host ""
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "   Update Complete!                      " -ForegroundColor Yellow
+Write-Host "==========================================" -ForegroundColor Cyan
+Start-Sleep -Seconds 3
+`;
+
+  fs.writeFileSync(psScriptPath, psScript, 'utf-8');
 
   try {
-    spawn('cmd.exe', ['/c', 'start', 'UGUL Standalone Updater', updaterBatPath, downloadUrl || ''], {
-      detached: true,
-      stdio: 'ignore'
-    }).unref();
+    exec(`start "" powershell.exe -ExecutionPolicy Bypass -NoExit -File "${psScriptPath}"`);
 
     setTimeout(() => {
       if (mainWindow) mainWindow.destroy();
       app.exit(0);
-    }, 300);
+    }, 1000);
   } catch (err) {
-    console.error('Failed to launch standalone updater:', err);
+    console.error('Failed to launch updater:', err);
   }
 }
 
