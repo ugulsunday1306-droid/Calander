@@ -20,33 +20,40 @@ function isNewerVersion(currentVer, latestVer) {
   return false;
 }
 
-// 철통 리다이렉트 스마트 다운로더 (GitHub 302 CDN Redirect & User-Agent & Content-Length 100% 추적)
-function downloadFile(url, destPath, onProgress, onComplete, onError) {
+// 초강력 무결성 다운로더 (HTTP/HTTPS 자동 전환 & CDN 302 리다이렉트 100% 추적 & 퍼센트 보장)
+function downloadFile(initialUrl, destPath, onProgress, onComplete, onError) {
   const fileStream = fs.createWriteStream(destPath);
+  let isFinished = false;
 
-  const follow = (targetUrl) => {
+  const fetchUrl = (currentUrl) => {
     try {
-      const parsedUrl = new URL(targetUrl);
-      const options = {
-        hostname: parsedUrl.hostname,
-        protocol: parsedUrl.protocol,
-        path: parsedUrl.pathname + parsedUrl.search,
+      const isHttps = currentUrl.startsWith('https:');
+      const client = isHttps ? https : require('http');
+
+      const req = client.get(currentUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': '*/*'
         }
-      };
-
-      https.get(options, (res) => {
-        // 301, 302, 303, 307, 308 리다이렉트 무조건 추적
+      }, (res) => {
+        // 301, 302, 303, 307, 308 리다이렉트 완전 처리
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          return follow(res.headers.location);
+          let redirectUrl = res.headers.location;
+          if (redirectUrl.startsWith('/')) {
+            const u = new URL(currentUrl);
+            redirectUrl = `${u.protocol}//${u.host}${redirectUrl}`;
+          }
+          return fetchUrl(redirectUrl);
         }
 
         if (res.statusCode !== 200) {
-          fileStream.close();
-          fs.unlink(destPath, () => {});
-          return onError(new Error(`Download HTTP Status ${res.statusCode}`));
+          if (!isFinished) {
+            isFinished = true;
+            fileStream.close();
+            fs.unlink(destPath, () => {});
+            onError(new Error(`HTTP Status ${res.statusCode}`));
+          }
+          return;
         }
 
         const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
@@ -56,41 +63,56 @@ function downloadFile(url, destPath, onProgress, onComplete, onError) {
           downloadedBytes += chunk.length;
           fileStream.write(chunk);
 
-          if (totalBytes > 0 && onProgress) {
-            const percent = Math.min(99, Math.round((downloadedBytes / totalBytes) * 100));
+          if (onProgress) {
+            let percent = 5;
+            if (totalBytes > 0) {
+              percent = Math.min(99, Math.round((downloadedBytes / totalBytes) * 100));
+            } else {
+              percent = Math.min(99, Math.max(5, Math.round((downloadedBytes / (1024 * 1024 * 10)) * 100)));
+            }
             onProgress(percent);
-          } else if (onProgress) {
-            // content-length가 누락된 경우에도 바이트 누적 기반으로 퍼센트 실시간 상승!
-            const pseudoPercent = Math.min(99, Math.max(5, Math.round((downloadedBytes / (1024 * 1024 * 35)) * 100)));
-            onProgress(pseudoPercent);
           }
         });
 
         res.on('end', () => {
           fileStream.end(() => {
-            if (onProgress) onProgress(100);
-            onComplete();
+            if (!isFinished) {
+              isFinished = true;
+              if (onProgress) onProgress(100);
+              onComplete();
+            }
           });
         });
 
         res.on('error', (err) => {
+          if (!isFinished) {
+            isFinished = true;
+            fileStream.close();
+            fs.unlink(destPath, () => {});
+            onError(err);
+          }
+        });
+      });
+
+      req.on('error', (err) => {
+        if (!isFinished) {
+          isFinished = true;
           fileStream.close();
           fs.unlink(destPath, () => {});
           onError(err);
-        });
-      }).on('error', (err) => {
+        }
+      });
+    } catch (err) {
+      if (!isFinished) {
+        isFinished = true;
         fileStream.close();
         fs.unlink(destPath, () => {});
         onError(err);
-      });
-    } catch (err) {
-      fileStream.close();
-      fs.unlink(destPath, () => {});
-      onError(err);
+      }
     }
   };
 
-  follow(url);
+  fetchUrl(initialUrl);
 }
 
 // 앱 재시작 및 덮어쓰기 배치 스크립트 실행 (사용자 데이터 events.json 및 cache 100% 보존 철통 쉴드)
