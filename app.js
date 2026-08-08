@@ -130,21 +130,32 @@ function updateCanvasBoardBounds() {
 }
 window.updateCanvasBoardBounds = updateCanvasBoardBounds;
 
-function focusCanvasBoard() {
+function focusCanvasBoard(targetItems = null) {
   const scrollContainer = document.getElementById('memo-canvas-scroll');
   const viewport = document.getElementById('memo-canvas-viewport');
   if (!scrollContainer || !viewport) return;
 
+  let itemsToFocus = targetItems;
+  if (!itemsToFocus) {
+    const selectedIds = getSelectedMemoIds();
+    if (selectedIds && selectedIds.length > 0) {
+      itemsToFocus = state.memoItems.filter(m => selectedIds.includes(m.id));
+    }
+  }
+  if (!itemsToFocus || itemsToFocus.length === 0) {
+    itemsToFocus = state.memoItems || [];
+  }
+
   let minX = Infinity, minY = Infinity;
   let maxX = -Infinity, maxY = -Infinity;
 
-  if (!state.memoItems || state.memoItems.length === 0) {
+  if (!itemsToFocus || itemsToFocus.length === 0) {
     minX = 80;
     minY = 80;
     maxX = 1280;
     maxY = 880;
   } else {
-    state.memoItems.forEach(item => {
+    itemsToFocus.forEach(item => {
       const w = item.width || 200;
       const h = item.height || 100;
       minX = Math.min(minX, item.x);
@@ -166,7 +177,8 @@ function focusCanvasBoard() {
   const scaleX = containerW / boardW;
   const scaleY = containerH / boardH;
   let targetZoom = Math.min(scaleX, scaleY) * 0.92;
-  targetZoom = Math.min(2.5, Math.max(0.15, targetZoom));
+  // 최소 배율 0.02 (2%), 최대 배율 2.5 (250%)까지 확대/축소 지원하여 아무리 큰 캔버스라도 한눈에 포커싱!
+  targetZoom = Math.min(2.5, Math.max(0.02, targetZoom));
 
   const boardCenterX = boardX + (boardW / 2);
   const boardCenterY = boardY + (boardH / 2);
@@ -178,11 +190,7 @@ function focusCanvasBoard() {
   state.memoPanX = targetPanX;
   state.memoPanY = targetPanY;
 
-
-  const zoomBadge = document.getElementById('memo-zoom-badge');
-  if (zoomBadge) {
-    zoomBadge.textContent = `${Math.round(targetZoom * 100)}%`;
-  }
+  applyMemoTransform();
 }
 
 function getCategoryColor(catId) {
@@ -3059,7 +3067,7 @@ function initMemoCanvas() {
       const canvasY = (mouseY - oldPanY) / oldZoom;
 
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-      const newZoom = Math.min(4.0, Math.max(0.15, Math.round((oldZoom * zoomFactor) * 100) / 100));
+      const newZoom = Math.min(4.0, Math.max(0.02, Math.round((oldZoom * zoomFactor) * 100) / 100));
 
       if (newZoom === oldZoom) return;
 
@@ -3991,14 +3999,15 @@ function renderGroupBoundsBox() {
 
     const zoom = state.memoZoom || 1.0;
     const startX = e.clientX;
+    const startY = e.clientY;
 
-    const spanW = (maxX - minX) || 1;
-    const spanH = (maxY - minY) || 1;
-    const initialBoxW = boxW;
-    const initialBoxH = boxH;
+    const spanW = Math.max(1, maxX - minX);
+    const spanH = Math.max(1, maxY - minY);
+    const initialBoxW = Math.max(1, boxW);
+    const initialBoxH = Math.max(1, boxH);
 
     const initialPositions = selectedItems.map(m => {
-      const cardEl = document.querySelector(`.memo-item[data-id="${m.id}"]`);
+      const cardEl = Array.from(document.querySelectorAll('.memo-item')).find(el => el.dataset.id == m.id);
       return {
         item: m,
         el: cardEl,
@@ -4483,8 +4492,13 @@ window.addEventListener('keydown', (e) => {
       showToast(`전체 ${allIds.length}개 카드가 선택되었습니다.`);
     } else if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.altKey && !e.metaKey) {
       e.preventDefault();
+      const selectedIds = getSelectedMemoIds();
       focusCanvasBoard();
-      showToast('캔버스 영역을 화면 정중앙에 맞췄습니다.');
+      if (selectedIds && selectedIds.length > 0) {
+        showToast(`${selectedIds.length}개 선택된 카드로 화면을 포커싱했습니다.`);
+      } else {
+        showToast('캔버스 전체 영역을 화면 정중앙에 맞췄습니다.');
+      }
     } else if (e.key === '[' || e.key === ']') {
       const selectedIds = getSelectedMemoIds();
       if (selectedIds.length > 0) {
