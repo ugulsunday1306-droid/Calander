@@ -3322,12 +3322,13 @@ function initMemoCanvas() {
       e.preventDefault();
       if (item.type === 'text') {
         const deltaFont = e.deltaY < 0 ? 1 : -1;
-        item.fontSize = Math.min(72, Math.max(10, (item.fontSize || 15) + deltaFont));
+        item.fontSize = Math.min(500, Math.max(6, (item.fontSize || 15) + deltaFont));
 
         const textarea = memoItemEl.querySelector('textarea');
         const textDisplay = memoItemEl.querySelector('.memo-text-display');
         if (textarea) textarea.style.fontSize = item.fontSize + 'px';
         if (textDisplay) textDisplay.style.fontSize = item.fontSize + 'px';
+        updateMemoTextBounds(item);
         saveEventsToStorage();
       } else {
         const delta = e.deltaY < 0 ? 20 : -20;
@@ -3662,8 +3663,9 @@ function resizeSelectedMemos(scaleFactor) {
     item.height = newH;
 
     if (item.type === 'text') {
-      const newFontSize = Math.max(10, Math.min(120, Math.round((item.fontSize || 15) * scaleFactor)));
+      const newFontSize = Math.max(6, Math.min(500, Math.round((item.fontSize || 15) * scaleFactor)));
       item.fontSize = newFontSize;
+      updateMemoTextBounds(item);
     }
 
     pushToMemoUndoStack({
@@ -3891,7 +3893,7 @@ function renderMemoCanvas(autoFocusId = null) {
 
           const currentFont = item.fontSize || 15;
           const delta = e.deltaY < 0 ? 1 : -1;
-          const newFontSize = Math.min(120, Math.max(10, currentFont + delta));
+          const newFontSize = Math.min(500, Math.max(6, currentFont + delta));
 
           if (newFontSize !== currentFont) {
             item.fontSize = newFontSize;
@@ -4058,7 +4060,7 @@ function renderGroupBoundsBox() {
                 const baseFont = pos.initialFontSize || 24;
                 const textScrollW = contentEl.scrollWidth + paddingOffset;
 
-                let newFontSize = Math.max(9, Math.min(120, Math.round(baseFont * scaleRatioX)));
+                let newFontSize = Math.max(6, Math.min(500, Math.round(baseFont * scaleRatioX)));
 
                 // 여백 구간 축소 시 폰트 유지
                 if (targetW < pos.initialW && targetW > textScrollW - 10) {
@@ -4334,12 +4336,13 @@ function makeMemoItemDraggable(el, item) {
         if (!isCtrlFontAdjust) return;
         const dy = startY - moveEvt.clientY;
         const fontDiff = Math.round(dy / 4);
-        item.fontSize = Math.min(72, Math.max(10, initialFontSize + fontDiff));
+        item.fontSize = Math.min(500, Math.max(6, initialFontSize + fontDiff));
 
         const textarea = el.querySelector('textarea');
         const textDisplay = el.querySelector('.memo-text-display');
         if (textarea) textarea.style.fontSize = item.fontSize + 'px';
         if (textDisplay) textDisplay.style.fontSize = item.fontSize + 'px';
+        updateMemoTextBounds(item);
       };
 
       const onMouseUp = () => {
