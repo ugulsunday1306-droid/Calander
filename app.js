@@ -3321,7 +3321,8 @@ function initMemoCanvas() {
     if (e.ctrlKey) {
       e.preventDefault();
       if (item.type === 'text') {
-        const deltaFont = e.deltaY < 0 ? 1 : -1;
+        const step = Math.max(3, Math.round((item.fontSize || 15) * 0.1));
+        const deltaFont = e.deltaY < 0 ? step : -step;
         item.fontSize = Math.min(500, Math.max(6, (item.fontSize || 15) + deltaFont));
 
         const textarea = memoItemEl.querySelector('textarea');
@@ -3892,7 +3893,8 @@ function renderMemoCanvas(autoFocusId = null) {
           e.stopPropagation();
 
           const currentFont = item.fontSize || 15;
-          const delta = e.deltaY < 0 ? 1 : -1;
+          const step = Math.max(3, Math.round(currentFont * 0.1));
+          const delta = e.deltaY < 0 ? step : -step;
           const newFontSize = Math.min(500, Math.max(6, currentFont + delta));
 
           if (newFontSize !== currentFont) {
